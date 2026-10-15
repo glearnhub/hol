@@ -1,5 +1,5 @@
 -- =============================================================================
--- Cassia Events: grants, Row Level Security and Storage (run THIRD)
+-- Handmaidens of the Lord: grants, Row Level Security and Storage (run THIRD)
 --
 -- Model, in one paragraph:
 --   * Anonymous visitors can read the public_events VIEW and call a short list

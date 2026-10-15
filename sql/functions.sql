@@ -1,5 +1,5 @@
 -- =============================================================================
--- Cassia Events: database functions (run SECOND, after schema.sql)
+-- Handmaidens of the Lord: database functions (run SECOND, after schema.sql)
 --
 -- Everything the website needs beyond plain reads goes through these functions.
 -- The public ones are SECURITY DEFINER so they can touch tables that anonymous

@@ -1,4 +1,4 @@
-// Database tests for Cassia Events.
+// Database tests for Handmaidens of the Lord.
 //
 // Runs sql/schema.sql, sql/functions.sql and sql/policies.sql against an
 // in-memory PostgreSQL (PGlite) with small stand-ins for Supabase's auth and

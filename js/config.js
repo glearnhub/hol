@@ -8,5 +8,5 @@ export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 
 // Site name shown in the header, footer and page titles.
 export const SITE = {
-  name: 'Cassia Events',
+  name: 'Handmaidens of the Lord',
 }

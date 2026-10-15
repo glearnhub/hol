@@ -1,4 +1,4 @@
-# Cassia Events: event registration and attendance
+# Handmaidens of the Lord: event registration and attendance
 
 A mobile-first web application for event organisers: public event
 listing and registration, QR-code check-in by volunteers who need **no login**,

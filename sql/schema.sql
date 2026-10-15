@@ -1,5 +1,5 @@
 -- =============================================================================
--- Cassia Events: database schema (run FIRST)
+-- Handmaidens of the Lord: database schema (run FIRST)
 -- Order: 1) schema.sql  2) functions.sql  3) policies.sql
 -- Safe to re-run: every statement is idempotent.
 -- =============================================================================

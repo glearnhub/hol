@@ -39,7 +39,7 @@ export async function initEventDetails() {
     return
   }
 
-  document.title = `${ev.name} · Cassia Events`
+  document.title = `${ev.name} · Handmaidens of the Lord`
   const urls = await posterUrls([ev.poster_path], 3600)
 
   const open = ev.registration_state === 'open'
