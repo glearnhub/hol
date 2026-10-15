@@ -838,3 +838,8 @@ body {
   max-width: 160px;
   margin: 3rem auto;
 }
+
+.highlight-word {
+  color: var(--primary);
+  font-weight: 700;
+}

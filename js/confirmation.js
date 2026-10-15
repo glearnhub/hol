@@ -172,7 +172,13 @@ export async function initConfirmation() {
       cancelled ? null : el('div', {}, el('div', { class: 'qr-box' }, canvas)),
       cancelled
         ? null
-        : el('p', { class: 'muted' }, 'Show this QR code at the entrance to check in. Tap “Save ticket as image” below, or take a screenshot of this page, so it is on your phone even without internet.'),
+        : el(
+            'p',
+            { class: 'muted' },
+            'Show this QR code at the entrance to check in. Tap “Save ticket as image” below, or take a ',
+            el('strong', { class: 'highlight-word' }, 'screenshot'),
+            ' of this page, so it is on your phone even without internet.'
+          ),
       cancelled
         ? null
         : el(
