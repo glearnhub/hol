@@ -84,10 +84,9 @@ export function renderPublicLayout(active = '') {
             href: whatsappLink(),
             target: '_blank',
             rel: 'noopener noreferrer',
-            title: `Message ${CREDIT.company} on WhatsApp`,
+            title: `Contact ${CREDIT.company}`,
           },
-          `Designed by ${CREDIT.designer} of ${CREDIT.company}`,
-          el('span', { class: 'credit-wa', 'aria-hidden': 'true' }, ' · WhatsApp')
+          `Designed by ${CREDIT.designer} of ${CREDIT.company}`
         )
       )
     )
