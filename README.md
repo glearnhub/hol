@@ -172,14 +172,13 @@ record.
 * **Registrations page:** search by name, email, phone or church; filter by
   present, not checked in, absent (after the event) or cancelled; sort; paginate;
   mark present or cancel a registration.
-* **Reports page:** per-event totals, attendance percentage
-  `attendees / valid registrations × 100` (0 when there are no registrations), remaining
-  capacity, a church-by-church summary and a participant list.
-  Cancelled registrations are never counted. Before an event ends, people who have
-  not checked in are labelled **Not yet checked in**; only after the event are they
-  called **Absent**.
-* **Export:** CSV (UTF-8 with BOM, opens correctly in Excel, formula-safe) and
-  **Print / save as PDF** from the browser's print dialog.
+* **Report (Reports page):** pick an event and get a one-page attendance report
+  headed by the Handmaidens of the Lord logo and the event's name, date and venue.
+  It lists only the people registered for that event, with a **green tick** for
+  attended and a **red cross** for did not attend. Cancelled registrations are not
+  listed. While an event is still running, a red cross means "not checked in so far".
+* **Export:** the report downloads as CSV (UTF-8 with BOM, opens correctly in Excel,
+  formula-safe), or use **Print / save as PDF** from the browser's print dialog.
 
 ## Project structure
 
@@ -248,8 +247,8 @@ link is printed in the terminal.
 | 14 | Revoke the link and reload the check-in page | "link has been revoked" |
 | 15 | Log out, visit `admin-dashboard.html` | Redirected to login |
 | 16 | Log in with a non-admin Supabase user | "does not have administrator access" |
-| 17 | Open Reports for a finished event | Totals, percentage and church summary agree with the list |
-| 18 | Export CSV and open in Excel | Accents and phone numbers are intact |
+| 17 | Open Reports and pick an event | Logo and event details on top, then the registered people with ticks and crosses |
+| 18 | Export CSV and open in Excel | Accents and phone numbers are intact; Attendance reads Attended / Did not attend |
 | 19 | Use the site on a phone | No horizontal scrolling, forms are usable |
 
 Features are marked verified only for what the automated tests and the offline

@@ -531,3 +531,134 @@ dialog::backdrop {
     text-align: right;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Attendance report
+   --------------------------------------------------------------------------- */
+.report-head {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding-bottom: 1rem;
+  margin-bottom: 1rem;
+  border-bottom: 3px solid var(--primary);
+}
+
+.report-logo {
+  width: 150px;
+  height: auto;
+  flex: 0 0 auto;
+}
+
+.report-title h2 {
+  font-size: 1.25rem;
+  margin: 0 0 0.15rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.report-event {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.25;
+}
+
+.report-generated {
+  font-size: 0.8rem;
+  margin-top: 0.35rem;
+}
+
+.report-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  align-items: center;
+  margin-bottom: 1rem;
+  font-weight: 500;
+}
+
+/* Green tick for attended, red cross for not attended. */
+.mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 1.1rem;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.mark-yes {
+  color: #15803d;
+  background: #dcfce7;
+}
+
+.mark-no {
+  color: #dc2626;
+  background: #fee2e2;
+}
+
+.report-table td.num {
+  width: 3.5rem;
+  color: var(--muted);
+}
+
+.report-table .attendance-cell {
+  text-align: center;
+  width: 7rem;
+}
+
+.report-table th:last-child {
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .report-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .report-logo {
+    width: 120px;
+  }
+
+  .report-table .attendance-cell,
+  .report-table td.num {
+    width: 100%;
+  }
+}
+
+@media print {
+  @page {
+    margin: 14mm;
+  }
+
+  .report.panel {
+    border: 0;
+    padding: 0;
+    margin: 0;
+  }
+
+  .report-logo {
+    width: 130px;
+  }
+
+  .mark,
+  .report-head {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .report-table th,
+  .report-table td {
+    padding: 0.4rem 0.6rem;
+  }
+
+  .report-table tr {
+    break-inside: avoid;
+  }
+}

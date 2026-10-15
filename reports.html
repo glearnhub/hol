@@ -19,28 +19,21 @@
       <div class="admin-content">
         <header id="admin-topbar"></header>
         <main id="page" class="hidden">
-          <div class="page-title">
-            <h1>Attendance reports</h1>
-            <div class="row-actions no-print">
-              <button id="print" class="btn btn-outline" type="button">Print / save as PDF</button>
-            </div>
+          <div class="page-title no-print">
+            <h1>Reports</h1>
           </div>
           <div id="status" aria-live="polite"></div>
-          <section class="panel">
-            <h2>All events</h2>
-            <div id="overview" class="table-wrap"></div>
-          </section>
-          <section class="panel" id="detail-panel">
-            <div class="toolbar no-print">
-              <div class="field grow">
-                <label for="event-select">Event report</label>
-                <select id="event-select"></select>
-              </div>
-              <button id="export-participants" class="btn btn-primary" type="button">Export participants (CSV)</button>
-              <button id="export-churches" class="btn btn-outline" type="button">Export church summary (CSV)</button>
+
+          <div class="toolbar no-print">
+            <div class="field grow">
+              <label for="event-select">Event</label>
+              <select id="event-select"></select>
             </div>
-            <div id="detail"></div>
-          </section>
+            <button id="export" class="btn btn-primary" type="button">Export CSV</button>
+            <button id="print" class="btn btn-outline" type="button">Print / save as PDF</button>
+          </div>
+
+          <article class="report panel" id="report" aria-live="polite"></article>
         </main>
       </div>
     </div>
