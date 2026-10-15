@@ -164,6 +164,6 @@ export const CHECKIN_ERRORS = {
   rate_limited: 'Too many requests. Please wait a moment and try again.',
   invalid_code: 'That code is not valid for this event.',
   not_found: 'No matching registration was found for this event.',
-  outside_window: 'Check-in is only open around the event date.',
+  outside_window: 'Check-in is not open for this event right now.',
   query_too_short: 'Type at least 3 characters.',
 }

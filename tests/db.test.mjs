@@ -327,6 +327,8 @@ const evB = await makeEvent('Prayer Night', 10)
 const bReg = await reg(evB, 50, { email: 'other@example.com' }, { ip: '10.4.0.1' })
 const crossQr = await as('anon', () => rpc('volunteer_check_in_qr', { p_token: vt, p_code: bReg.qr_token }), volIp)
 check("event A's link cannot check in event B's QR", crossQr.ok === false && crossQr.error === 'invalid_code')
+check('rejected code message names the event being checked',
+  /Annual Women Conference/.test(crossQr.message || ''), crossQr.message)
 const bId = (await db.query(`select id from public.registrations where registration_reference = $1`, [bReg.registration_reference])).rows[0].id
 const crossId = await as('anon', () => rpc('volunteer_check_in', { p_token: vt, p_registration_id: bId }), volIp)
 check("event A's link cannot check in event B's registration id", crossId.ok === false && crossId.error === 'not_found')
@@ -369,6 +371,25 @@ const farReg = await reg(evFar, 70, {}, { ip: '10.7.0.1' })
 const farId = (await db.query(`select id from public.registrations where registration_reference = $1`, [farReg.registration_reference])).rows[0].id
 const early = await as('anon', () => rpc('volunteer_check_in', { p_token: farLink.token, p_registration_id: farId }), { ip: '10.7.0.2' })
 check('check-in is refused long before the event', early.error === 'outside_window', JSON.stringify(early))
+check('the refusal names the event and the open dates',
+  /Far Future/.test(early.message) && /2098/.test(early.message) && /2099/.test(early.message) && /Nairobi/.test(early.message),
+  early.message)
+
+// A few days ahead (someone rehearsing before the big day) is allowed.
+const daysAhead = (n) => new Date(Date.now() + n * 86400000 + 3 * 3600000).toISOString().slice(0, 10)
+const evSoon = await makeEvent('Rehearsal Event', 5, { date: daysAhead(4) })
+const soonLink = await as('authenticated', () => rpc('admin_create_volunteer_link', { p_event_id: evSoon, p_label: 'x', p_expires_at: new Date(Date.now() + 86400000).toISOString() }), { uid: adminId })
+const soonReg = await reg(evSoon, 80, {}, { ip: '10.7.0.3' })
+const soonCi = await as('anon', () => rpc('volunteer_check_in_qr', { p_token: soonLink.token, p_code: soonReg.qr_token }), { ip: '10.7.0.4' })
+check('check-in works for an event four days away', soonCi.ok && soonCi.result === 'checked_in', JSON.stringify(soonCi))
+
+// Today's evening event (for example 8 pm) is open all day.
+const evTonight = await makeEvent('Tonight Event', 5, { date: new Date(Date.now() + 3 * 3600000).toISOString().slice(0, 10) })
+await db.query(`update public.events set start_time = '20:00', end_time = null where id = $1`, [evTonight])
+const tonightLink = await as('authenticated', () => rpc('admin_create_volunteer_link', { p_event_id: evTonight, p_label: 'x', p_expires_at: new Date(Date.now() + 86400000).toISOString() }), { uid: adminId })
+const tonightReg = await reg(evTonight, 81, {}, { ip: '10.7.0.5' })
+const tonightCi = await as('anon', () => rpc('volunteer_check_in_qr', { p_token: tonightLink.token, p_code: tonightReg.qr_token }), { ip: '10.7.0.6' })
+check('check-in works for an 8 pm event on the day', tonightReg.ok && tonightCi.ok && tonightCi.result === 'checked_in', JSON.stringify([tonightReg, tonightCi]))
 
 // ===========================================================================
 console.log('\n6. Admin attendance and reports')

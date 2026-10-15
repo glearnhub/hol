@@ -485,10 +485,19 @@ begin
 
   select * into ev from public.events where id = p_event_id;
 
-  -- Check-in is open from the day before the event until the day after it.
-  if now() < private.event_start_at(ev) - interval '1 day'
+  -- Check-in opens a week before the event (so volunteers can rehearse and test)
+  -- and closes one day after it ends. Times are shown in Nairobi time.
+  if now() < private.event_start_at(ev) - interval '7 days'
      or now() > private.event_end_at(ev) + interval '1 day' then
-    return private.fail('outside_window', 'Check-in is only open around the event date.');
+    return private.fail(
+      'outside_window',
+      format(
+        'Check-in for "%s" is open from %s until %s (Nairobi time).',
+        ev.name,
+        to_char((private.event_start_at(ev) - interval '7 days') at time zone private.event_tz(), 'FMDD Mon YYYY, FMHH12:MI AM'),
+        to_char((private.event_end_at(ev) + interval '1 day') at time zone private.event_tz(), 'FMDD Mon YYYY, FMHH12:MI AM')
+      )
+    );
   end if;
 
   insert into public.attendance (registration_id, event_id, method, checked_in_by)
@@ -632,15 +641,18 @@ declare
   code text;
   v_reg uuid;
   v_method text;
+  v_event_name text;
 begin
   select * into v from private.resolve_volunteer(p_token);
   if v.state <> 'ok' then
     return private.volunteer_error(v.state);
   end if;
 
+  select name into v_event_name from public.events where id = v.event_id;
+
   code := btrim(coalesce(p_code, ''));
   if char_length(code) < 6 or char_length(code) > 200 then
-    return private.fail('invalid_code', 'That code is not valid for this event.');
+    return private.fail('invalid_code', format('That code is not registered for "%s".', v_event_name));
   end if;
 
   if upper(code) like 'HOL-%' then
@@ -654,7 +666,10 @@ begin
   end if;
 
   if v_reg is null then
-    return private.fail('invalid_code', 'That code is not valid for this event.');
+    return private.fail(
+      'invalid_code',
+      format('That code is not registered for "%s". It may belong to a different event, or the registration was cancelled.', v_event_name)
+    );
   end if;
 
   return private.do_check_in(v.access_id, v.event_id, v_reg, v_method, 'volunteer:' || v.access_id::text);

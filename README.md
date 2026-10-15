@@ -174,8 +174,9 @@ Check-in methods:
 * **"Camera is being used by another app":** close the other app and retry.
 * The page must be served over **HTTPS** for the live camera to work.
 
-Check-in is accepted from one day before the event until one day after, in
-Nairobi time. Duplicate check-ins report "Already checked in" and create no new
+Check-in is accepted from **seven days before** the event starts (so volunteers can
+rehearse) until **one day after** it ends, in Nairobi time. Outside that window the
+check-in screen says exactly when it opens and closes. Duplicate check-ins report "Already checked in" and create no new
 record.
 
 ## Reports and exports
