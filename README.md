@@ -113,8 +113,10 @@ How the policies work, in plain words:
 * **Capacity is atomic.** `register_participant` locks the event row (`FOR UPDATE`),
   counts active registrations and inserts inside one transaction, so simultaneous
   registrations can never exceed capacity.
-* **Duplicates** are prevented by a unique index on `(event_id, lower(email))`
-  for active registrations. A cancelled registration frees that email.
+* **Duplicates** are prevented per event by e-mail (case-insensitive) **and** by phone
+  number. Phone numbers are normalised first, so `0702499324`, `702499324`,
+  `254702499324` and `+254 702 499 324` count as the same number. A cancelled
+  registration frees both the email and the phone.
 * **Attendance is one row per registration**, enforced by a unique key, so two
   volunteers scanning the same person at once still produce a single record.
 * **Secrets are stored hashed.** Participant QR tokens and volunteer link tokens are
@@ -258,7 +260,7 @@ link is printed in the terminal.
 | 4 | Upload a poster (try a PDF, then a 5 MB image) | Wrong type and size are refused; a valid image shows |
 | 5 | Register a participant | Confirmation page with reference and QR code |
 | 6 | Submit bad email / empty fields | Clear field errors |
-| 7 | Register the same email again | "already registered" |
+| 7 | Register the same email again, or the same phone written another way (`0702…` vs `+254702…`) | "already registered" |
 | 8 | Set capacity to 2, register a third person | "fully booked" |
 | 9 | Open the QR in a QR reader | Only a long hex string (no personal data) |
 | 10 | Create a check-in link, open it on a phone, scan the QR | "Checked in", count increases |
@@ -305,8 +307,9 @@ Configuration**.
   not a substitute for the token entropy that actually protects access.
 * **No emails are sent** (confirmations are shown on screen and can be saved or
   printed). Adding email would need an Edge Function or a mail service.
-* **Duplicate identity policy:** one active registration per email per event. The
-  same phone number may be used by family members with different emails.
+* **Duplicate identity policy:** one active registration per email **and** per phone
+  number per event. Family members sharing one phone must register with their own
+  numbers, or the organisers can register them at the door.
 * **Events are cancelled, never deleted,** once they exist (no delete grant), so
   registration history is preserved.
 * **PDF reports** use the browser's "Save as PDF" rather than a bundled PDF library.

@@ -12,6 +12,7 @@ const ERROR_FIELDS = {
   invalid_phone: 'phone',
   invalid_church: 'church',
   already_registered: 'email',
+  phone_already_registered: 'phone',
 }
 
 function showFieldErrors(form, errors) {

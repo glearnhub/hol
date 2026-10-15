@@ -53,15 +53,22 @@ as $$
 declare
   d text;
 begin
+  -- Every way of writing the same Kenyan number ends up as +254XXXXXXXXX, so
+  -- 0702499324, 702499324, 254702499324, +254702499324 and +254 0702 499 324
+  -- are all treated as one phone number.
   d := regexp_replace(coalesce(p, ''), '[^0-9+]', '', 'g');
   if d like '+%' then
-    return '+' || regexp_replace(substr(d, 2), '[^0-9]', '', 'g');
+    d := regexp_replace(substr(d, 2), '[^0-9]', '', 'g');
   elsif d like '00%' then
-    return '+' || substr(d, 3);
+    d := substr(d, 3);
   elsif d like '0%' then
-    return '+254' || substr(d, 2);
+    d := '254' || substr(d, 2);
   elsif d ~ '^[17][0-9]{8}$' then
-    return '+254' || d;
+    d := '254' || d;
+  end if;
+  -- "+254 0712..." (the leading 0 typed again after the country code)
+  if d ~ '^2540[0-9]{9}$' then
+    d := '254' || substr(d, 5);
   end if;
   return '+' || d;
 end;
@@ -278,6 +285,22 @@ begin
     return private.fail('registration_closed', 'Registration for this event has closed.');
   end if;
 
+  -- One active registration per person per event: the same e-mail address OR the same
+  -- phone number (in any spelling, see normalize_phone) cannot register again. The event
+  -- row is locked above, so two simultaneous attempts cannot both get through.
+  if exists (
+    select 1 from public.registrations
+    where event_id = ev.id and status = 'registered' and lower(email) = v_email
+  ) then
+    return private.fail('already_registered', 'This email address is already registered for this event.');
+  end if;
+  if exists (
+    select 1 from public.registrations
+    where event_id = ev.id and status = 'registered' and phone = v_phone
+  ) then
+    return private.fail('phone_already_registered', 'This phone number is already registered for this event.');
+  end if;
+
   select count(*) into taken
   from public.registrations
   where event_id = ev.id and status = 'registered';
@@ -304,6 +327,12 @@ begin
         where event_id = ev.id and lower(email) = v_email and status = 'registered'
       ) then
         return private.fail('already_registered', 'This email address is already registered for this event.');
+      end if;
+      if exists (
+        select 1 from public.registrations
+        where event_id = ev.id and phone = v_phone and status = 'registered'
+      ) then
+        return private.fail('phone_already_registered', 'This phone number is already registered for this event.');
       end if;
       if attempts >= 5 then
         return private.fail('try_again', 'Something went wrong. Please try again.');

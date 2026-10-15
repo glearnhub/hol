@@ -101,10 +101,12 @@ export function notConfiguredNotice() {
 // ---- Validation (the database repeats every one of these checks) ---------------
 export function normalizePhone(input) {
   let d = String(input || '').replace(/[^0-9+]/g, '')
-  if (d.startsWith('+')) return '+' + d.slice(1).replace(/[^0-9]/g, '')
-  if (d.startsWith('00')) return '+' + d.slice(2)
-  if (d.startsWith('0')) return '+254' + d.slice(1)
-  if (/^[17][0-9]{8}$/.test(d)) return '+254' + d
+  if (d.startsWith('+')) d = d.slice(1).replace(/[^0-9]/g, '')
+  else if (d.startsWith('00')) d = d.slice(2)
+  else if (d.startsWith('0')) d = '254' + d.slice(1)
+  else if (/^[17][0-9]{8}$/.test(d)) d = '254' + d
+  // "+254 0712..." (the leading 0 typed again after the country code)
+  if (/^2540[0-9]{9}$/.test(d)) d = '254' + d.slice(4)
   return '+' + d
 }
 

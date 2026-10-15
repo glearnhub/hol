@@ -198,6 +198,19 @@ check('only a hash of the token is stored', stored.rows[0].qr_token_hash !== r1.
 const dupe = await reg(evA, 1, { email: 'GRACE1@Example.com' }, { ip: '10.1.0.2' })
 check('duplicate e-mail (any case) rejected', dupe.error === 'already_registered', JSON.stringify(dupe))
 
+// The same person cannot register again with a different e-mail but the same phone,
+// however the number is written.
+let phoneN = 0
+for (const spelling of ['0712000101', '+254712000101', '254712000101', '712000101', '+254 0712 000 101', '0712-000-101', '00254712000101']) {
+  phoneN += 1
+  const d = await reg(evA, 50 + phoneN, { phone: spelling, email: `other${phoneN}@example.com` }, { ip: `10.1.1.${phoneN}` })
+  check(`same phone as "${spelling}" rejected`, d.error === 'phone_already_registered', JSON.stringify(d))
+}
+const afterDupes = await db.query(`select count(*)::int as n from public.registrations where event_id = $1`, [evA])
+check('rejected duplicates created no registration', afterDupes.rows[0].n === 1, String(afterDupes.rows[0].n))
+const phoneNorm = (await db.query(`select private.normalize_phone('0702499324') a, private.normalize_phone('+254702499324') b, private.normalize_phone('254 702 499 324') c, private.normalize_phone('+2540702499324') d`)).rows[0]
+check('0702499324 and +254702499324 are the same number', phoneNorm.a === '+254702499324' && phoneNorm.a === phoneNorm.b && phoneNorm.b === phoneNorm.c && phoneNorm.c === phoneNorm.d, JSON.stringify(phoneNorm))
+
 check('invalid e-mail rejected', (await reg(evA, 9, { email: 'not-an-email' }, { ip: '10.1.0.3' })).error === 'invalid_email')
 check('invalid phone rejected', (await reg(evA, 9, { phone: '12' }, { ip: '10.1.0.3' })).error === 'invalid_phone')
 check('missing name rejected', (await reg(evA, 9, { name: ' ' }, { ip: '10.1.0.3' })).error === 'invalid_name')

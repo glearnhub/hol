@@ -89,6 +89,23 @@ create unique index if not exists registrations_event_email_active_uq
   on public.registrations (event_id, lower(email))
   where status = 'registered';
 
+-- The same phone number may not hold two active registrations for one event. Created
+-- only when the data is already clean; the registration function enforces the rule
+-- either way, so a database with old duplicates is not blocked from upgrading.
+do $$
+begin
+  if not exists (
+    select 1 from public.registrations where status = 'registered'
+    group by event_id, phone having count(*) > 1
+  ) then
+    create unique index if not exists registrations_event_phone_active_uq
+      on public.registrations (event_id, phone)
+      where status = 'registered';
+  else
+    raise notice 'Duplicate phone numbers already exist; the phone unique index was not created. Cancel the duplicates, then re-run schema.sql.';
+  end if;
+end $$;
+
 create index if not exists registrations_event_idx on public.registrations (event_id, status);
 create index if not exists registrations_phone_idx on public.registrations (event_id, phone);
 create index if not exists registrations_name_idx on public.registrations (event_id, lower(full_name));
