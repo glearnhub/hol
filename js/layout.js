@@ -21,8 +21,6 @@ export function renderPublicLayout(active = '') {
   const links = [
     { href: 'index.html', label: 'Home', key: 'home' },
     { href: 'events.html', label: 'Upcoming Events', key: 'events' },
-    { href: 'index.html#about', label: 'About', key: 'about' },
-    { href: 'index.html#contact', label: 'Contact', key: 'contact' },
   ]
 
   const nav = el(
@@ -61,11 +59,6 @@ export function renderPublicLayout(active = '') {
     )
   )
 
-  const contactBits = []
-  if (SITE.contactEmail) contactBits.push(el('li', {}, 'Email: ', el('a', { href: `mailto:${SITE.contactEmail}` }, SITE.contactEmail)))
-  if (SITE.contactPhone) contactBits.push(el('li', {}, 'Phone: ', el('a', { href: `tel:${SITE.contactPhone.replace(/\s+/g, '')}` }, SITE.contactPhone)))
-  if (SITE.location) contactBits.push(el('li', {}, SITE.location))
-
   const footer = el(
     'footer',
     { class: 'site-footer' },
@@ -74,9 +67,7 @@ export function renderPublicLayout(active = '') {
       { class: 'container footer-inner' },
       el('div', {}, el('strong', {}, SITE.name), el('p', {}, 'Events made simple: register, attend, celebrate.')),
       el('ul', { class: 'footer-links' },
-        el('li', {}, el('a', { href: 'events.html' }, 'Upcoming events')),
-        el('li', {}, el('a', { href: 'index.html#about' }, 'About us')),
-        ...contactBits
+        el('li', {}, el('a', { href: 'events.html' }, 'Upcoming events'))
       ),
       el('p', { class: 'copyright' }, `© ${new Date().getFullYear()} ${SITE.name}. All rights reserved.`)
     )

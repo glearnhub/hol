@@ -2,7 +2,6 @@
 import { supabase, isConfigured } from './supabase-client.js'
 import { posterUrls } from './posters.js'
 import { renderPublicLayout, brandMark } from './layout.js'
-import { SITE } from './config.js'
 import {
   el, $, formatDate, formatTimeRange, notice, notConfiguredNotice, REGISTRATION_STATE, debounce,
 } from './ui.js'
@@ -70,19 +69,8 @@ async function renderEvents(host, events, emptyMessage) {
   host.replaceChildren(...events.map((ev) => eventCard(ev, urls.get(ev.poster_path))))
 }
 
-function renderContactList() {
-  const list = $('#contact-list')
-  if (!list) return
-  const items = []
-  if (SITE.contactEmail) items.push(el('li', {}, 'Email: ', el('a', { href: `mailto:${SITE.contactEmail}` }, SITE.contactEmail)))
-  if (SITE.contactPhone) items.push(el('li', {}, 'Phone: ', el('a', { href: `tel:${SITE.contactPhone.replace(/\s+/g, '')}` }, SITE.contactPhone)))
-  if (SITE.location) items.push(el('li', {}, SITE.location))
-  list.replaceChildren(...(items.length ? items : [el('li', { class: 'muted' }, 'Contact details will be added soon.')]))
-}
-
 export async function initHome() {
   renderPublicLayout('home')
-  renderContactList()
   const host = $('#featured-events')
   if (!isConfigured) {
     host.replaceChildren(notConfiguredNotice())

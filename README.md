@@ -78,9 +78,8 @@ export const SUPABASE_ANON_KEY = 'YOUR-ANON-KEY'   // Project Settings → API
 ```
 
 The anon (publishable) key is meant to be public. **Never** put the `service_role`
-key in any file of this project. Fill in `SITE.contactEmail`, `contactPhone` and
-`location` to show contact details on the home page and footer. `.env.example`
-lists the same values for reference.
+key in any file of this project. `SITE.name` in the same file sets the site name.
+`.env.example` lists the same values for reference.
 
 ### 5. Open the site
 
