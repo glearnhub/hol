@@ -312,3 +312,13 @@ Configuration**.
 * **PDF reports** use the browser's "Save as PDF" rather than a bundled PDF library.
 * **Camera scanning** needs HTTPS (or localhost) and the user's permission; the
   search and manual-code methods work without a camera.
+
+## Link previews (thumbnail)
+
+When a page link is shared on WhatsApp, Facebook, X or similar, the preview shows the
+Handmaidens of the Lord logo (`img/og-image.png`, 1200×630). The tags are in the `<head>`
+of each public page and use the absolute address `https://hol-lake.vercel.app`. If you
+move the site to a custom domain, replace that address in the `og:` and `twitter:` meta
+tags of `index.html`, `events.html`, `event-details.html`, `register.html`,
+`confirmation.html` and `check-in.html`. Chat apps cache previews, so a link shared
+before this change may keep its old preview for a while.
