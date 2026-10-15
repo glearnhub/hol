@@ -57,7 +57,7 @@ export async function initConfirmation() {
     width: 240,
     margin: 1,
     errorCorrectionLevel: 'M',
-    color: { dark: '#4C1D95', light: '#FFFFFF' },
+    color: { dark: '#600086', light: '#FFFFFF' },
   })
 
   host.replaceChildren(

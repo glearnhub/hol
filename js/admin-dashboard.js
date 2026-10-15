@@ -77,7 +77,7 @@ async function renderChart(events) {
     data: {
       labels: events.map((e) => (e.name.length > 22 ? e.name.slice(0, 21) + '…' : e.name)),
       datasets: [
-        { label: 'Registered', data: events.map((e) => e.registrations), backgroundColor: '#7C3AED' },
+        { label: 'Registered', data: events.map((e) => e.registrations), backgroundColor: '#8e24aa' },
         { label: 'Attended', data: events.map((e) => e.attendees), backgroundColor: '#15803D' },
       ],
     },

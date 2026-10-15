@@ -1,8 +1,8 @@
 /* Handmaidens of the Lord: shared + public styles */
 :root {
-  --primary: #4c1d95;
-  --secondary: #7c3aed;
-  --accent: #ede9fe;
+  --primary: #600086;
+  --secondary: #8e24aa;
+  --accent: #f3e5f5;
   --bg: #ffffff;
   --text: #1f2937;
   --muted: #6b7280;
@@ -14,7 +14,7 @@
   --warning-bg: #fef3c7;
   --border: #e5e7eb;
   --radius: 14px;
-  --shadow: 0 1px 2px rgba(31, 41, 55, 0.06), 0 8px 24px -8px rgba(76, 29, 149, 0.18);
+  --shadow: 0 1px 2px rgba(31, 41, 55, 0.06), 0 8px 24px -8px rgba(96, 0, 134, 0.18);
   --font: 'Poppins', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
@@ -205,7 +205,7 @@ p {
 }
 
 .btn-primary:hover {
-  background: #3b1577;
+  background: #45005f;
 }
 
 .btn-secondary {
@@ -237,7 +237,7 @@ p {
 
 /* ---- Hero ---- */
 .hero {
-  background: linear-gradient(135deg, #4c1d95 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, #600086 0%, #8e24aa 100%);
   color: #fff;
   padding: 4.5rem 0 5rem;
   position: relative;
@@ -263,7 +263,7 @@ p {
 .hero p {
   max-width: 560px;
   font-size: 1.1rem;
-  color: #f5f3ff;
+  color: #faf5fc;
 }
 
 .verse {
@@ -279,7 +279,7 @@ p {
 }
 
 .section-alt {
-  background: #faf8ff;
+  background: #fbf7fc;
 }
 
 .section-title {
@@ -319,7 +319,7 @@ p {
 
 .poster {
   aspect-ratio: 4 / 3;
-  background: linear-gradient(135deg, #ede9fe, #ddd6fe);
+  background: linear-gradient(135deg, #f3e5f5, #e1bee7);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -564,7 +564,7 @@ p {
 /* ---- Footer ---- */
 .site-footer {
   background: var(--primary);
-  color: #ede9fe;
+  color: #f3e5f5;
   padding: 2.25rem 0 1.5rem;
   margin-top: auto;
 }

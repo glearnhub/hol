@@ -1,6 +1,6 @@
 /* Administrator area (loads after styles.css) */
 body.admin {
-  background: #f5f3ff;
+  background: #faf5fc;
   display: block;
 }
 
@@ -12,7 +12,7 @@ body.admin {
 
 #admin-sidebar {
   background: var(--primary);
-  color: #ede9fe;
+  color: #f3e5f5;
   padding: 1.25rem 1rem;
   display: flex;
   flex-direction: column;
@@ -42,7 +42,7 @@ body.admin {
   display: flex;
   gap: 0.7rem;
   align-items: center;
-  color: #ede9fe;
+  color: #f3e5f5;
   text-decoration: none;
   padding: 0.65rem 0.85rem;
   border-radius: 10px;
@@ -61,7 +61,7 @@ body.admin {
 }
 
 .sidebar-foot a {
-  color: #ddd6fe;
+  color: #e1bee7;
 }
 
 .admin-content {
@@ -195,14 +195,14 @@ table.data td {
 }
 
 table.data th {
-  background: #faf8ff;
+  background: #fbf7fc;
   color: var(--primary);
   font-weight: 600;
   white-space: nowrap;
 }
 
 table.data tr:hover td {
-  background: #fcfbff;
+  background: #fdf9fe;
 }
 
 .toolbar {
@@ -293,7 +293,7 @@ dialog::backdrop {
   align-items: center;
   justify-content: center;
   padding: 1.5rem;
-  background: linear-gradient(135deg, #4c1d95, #7c3aed);
+  background: linear-gradient(135deg, #600086, #8e24aa);
 }
 
 .login-card {
