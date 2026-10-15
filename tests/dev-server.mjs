@@ -47,7 +47,7 @@ const ev = async (name, cap, status = 'published', extra = '') =>
   (await db.query(
     `insert into public.events (name, description, venue, event_date, start_time, end_time, capacity, status)
      values ($1, $2, 'Grace Chapel, Nairobi', $3, '09:00', '16:00', $4, $5) returning id`,
-    [name, 'A day of worship, teaching and fellowship.\nEveryone is welcome. ' + extra, day, cap, status]
+    [name, 'A full day of talks, workshops and networking.\nEveryone is welcome. ' + extra, day, cap, status]
   )).rows[0].id
 
 const conference = await ev("Women's Conference 2026", 5)

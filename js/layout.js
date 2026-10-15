@@ -72,7 +72,7 @@ export function renderPublicLayout(active = '') {
     el(
       'div',
       { class: 'container footer-inner' },
-      el('div', {}, el('strong', {}, SITE.name), el('p', {}, 'Growing together in faith, fellowship and service.')),
+      el('div', {}, el('strong', {}, SITE.name), el('p', {}, 'Events made simple: register, attend, celebrate.')),
       el('ul', { class: 'footer-links' },
         el('li', {}, el('a', { href: 'events.html' }, 'Upcoming events')),
         el('li', {}, el('a', { href: 'index.html#about' }, 'About us')),

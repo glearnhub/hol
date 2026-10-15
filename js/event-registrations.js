@@ -23,7 +23,7 @@ async function loadReport() {
   $('#event-name').textContent = report.name
   $('#event-meta').textContent =
     `${formatDate(report.event_date)} · ${formatTimeRange(report.start_time, report.end_time)} · ${report.venue}`
-  document.title = `${report.name} registrations · Handmaidens of the Lord`
+  document.title = `${report.name} registrations · Cassia Events`
 
   $('#stats').replaceChildren(
     statCard(`${report.registrations} / ${report.capacity}`, 'Registered'),

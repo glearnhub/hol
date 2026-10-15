@@ -8,7 +8,7 @@ export const SUPABASE_ANON_KEY = 'YOUR-ANON-KEY'
 
 // Shown in the footer and on the home page. Leave a value empty to hide it.
 export const SITE = {
-  name: 'Handmaidens of the Lord',
+  name: 'Cassia Events',
   contactEmail: '',
   contactPhone: '',
   location: '',

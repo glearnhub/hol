@@ -32,7 +32,7 @@ function renderShell(active, session) {
   const topbar = $('#admin-topbar')
 
   sidebar.replaceChildren(
-    el('a', { href: 'admin-dashboard.html', class: 'admin-brand' }, brandMark(34), el('span', {}, 'Handmaidens of the Lord')),
+    el('a', { href: 'admin-dashboard.html', class: 'admin-brand' }, brandMark(34), el('span', {}, 'Cassia Events')),
     el(
       'nav',
       { 'aria-label': 'Administration' },
