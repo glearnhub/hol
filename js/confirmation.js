@@ -176,7 +176,7 @@ export async function initConfirmation() {
             'p',
             { class: 'muted' },
             'Show this QR code at the entrance to check in. Tap “Save ticket as image” below, or take a ',
-            el('strong', { class: 'highlight-word' }, 'screenshot'),
+            el('strong', { class: 'highlight-word' }, 'SCREENSHOT'),
             ' of this page, so it is on your phone even without internet.'
           ),
       cancelled
