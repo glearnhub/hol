@@ -199,3 +199,26 @@ body.checkin {
   border-radius: 50%;
   padding: 4px;
 }
+
+/* Scanner helpers */
+.ci-actions {
+  flex-wrap: wrap;
+}
+
+.ci-photo {
+  cursor: pointer;
+}
+
+#photo-input:focus-visible + * ,
+.ci-photo:focus-within {
+  outline: 3px solid var(--accent);
+}
+
+#camera-help {
+  text-align: left;
+  font-size: 0.95rem;
+}
+
+#camera-help button {
+  margin-top: 0.5rem;
+}

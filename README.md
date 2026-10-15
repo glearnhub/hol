@@ -158,8 +158,21 @@ Check-in methods:
    with no name, phone or email inside).
 2. **Search by name or phone:** the volunteer sees only a name and a masked phone
    hint (`••• ••• 456`), confirms the person, then taps **Mark Present**.
-3. **Manual code:** typing the reference printed under the QR (for example
+3. **Scan from a photo:** takes a picture of the QR code with the phone's camera app
+   and reads it. This works even where the live camera is blocked.
+4. **Manual code:** typing the reference printed under the QR (for example
    `HOL-1A2B3C4D`) works when the camera is unavailable.
+
+### If the scanner will not start
+
+* **Opened from WhatsApp or another app?** Those apps' built-in browsers usually
+  block the camera. Tap the menu and choose "Open in Chrome" or "Open in browser"
+  (the check-in page has a "Copy this link" button for this), or use
+  **Scan from a photo**.
+* **"Camera access is blocked":** allow Camera for the site in the browser (lock or
+  camera icon in the address bar), then press **Start camera** again.
+* **"Camera is being used by another app":** close the other app and retry.
+* The page must be served over **HTTPS** for the live camera to work.
 
 Check-in is accepted from one day before the event until one day after, in
 Nairobi time. Duplicate check-ins report "Already checked in" and create no new
