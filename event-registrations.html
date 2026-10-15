@@ -26,11 +26,41 @@
             </div>
             <div class="row-actions">
               <a class="btn btn-outline" href="manage-events.html">← All events</a>
+              <button id="thank-you" class="btn btn-secondary" type="button" aria-expanded="false" aria-controls="thank-panel">Thank-you email</button>
               <button id="export" class="btn btn-primary" type="button">Export CSV</button>
             </div>
           </div>
           <div id="status" aria-live="polite"></div>
           <div id="stats" class="stats"></div>
+          <section class="panel hidden" id="thank-panel" aria-labelledby="thank-title">
+            <h2 id="thank-title">Thank-you email to people who attended</h2>
+            <p class="muted" id="thank-summary">Loading…</p>
+            <div class="field">
+              <label for="email-list">Email addresses of attendees</label>
+              <textarea id="email-list" rows="4" readonly></textarea>
+            </div>
+            <div class="row-actions">
+              <button id="copy-emails" class="btn btn-primary" type="button">Copy emails</button>
+              <button id="open-mail" class="btn btn-outline" type="button">Open in my email app</button>
+              <label class="check-inline"><input id="outlook-sep" type="checkbox" /> Use semicolons (Outlook)</label>
+            </div>
+            <p class="muted" style="margin-top:.75rem">
+              Paste the addresses into the <strong>BCC</strong> box of your email (not “To”), so attendees
+              do not see each other's email addresses.
+            </p>
+            <div class="field" style="margin-top:1rem">
+              <label for="thank-subject">Suggested subject</label>
+              <input id="thank-subject" type="text" readonly />
+            </div>
+            <div class="field">
+              <label for="thank-body">Suggested message</label>
+              <textarea id="thank-body" rows="7" readonly></textarea>
+            </div>
+            <div class="row-actions">
+              <button id="copy-subject" class="btn btn-outline btn-small" type="button">Copy subject</button>
+              <button id="copy-message" class="btn btn-outline btn-small" type="button">Copy message</button>
+            </div>
+          </section>
           <section class="panel">
             <div class="toolbar">
               <div class="field grow">

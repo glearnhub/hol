@@ -168,6 +168,98 @@ async function exportCsv() {
   }
 }
 
+// ---- Thank-you email: gather the addresses of everyone who attended ---------------
+let attendeeEmails = []
+
+async function copyText(text, okMessage) {
+  try {
+    await navigator.clipboard.writeText(text)
+    toast(okMessage)
+  } catch {
+    // Older browsers / blocked clipboard: select the text so Ctrl+C works.
+    toast('Select the text and press Copy (Ctrl+C) on your keyboard.', 'error')
+  }
+}
+
+function emailSeparator() {
+  return $('#outlook-sep').checked ? '; ' : ', '
+}
+
+function paintEmailList() {
+  $('#email-list').value = attendeeEmails.join(emailSeparator())
+}
+
+async function loadThankYou() {
+  const summary = $('#thank-summary')
+  summary.textContent = 'Loading…'
+  try {
+    const rows = await fetchAllRegistrations(eventId, { filter: 'present', sort: 'name_asc' })
+    const seen = new Set()
+    attendeeEmails = []
+    for (const r of rows) {
+      const email = String(r.email || '').trim()
+      if (email && !seen.has(email.toLowerCase())) {
+        seen.add(email.toLowerCase())
+        attendeeEmails.push(email)
+      }
+    }
+    summary.textContent = attendeeEmails.length
+      ? `${attendeeEmails.length} attendee${attendeeEmails.length === 1 ? '' : 's'} checked in. Their email addresses are listed below.`
+      : 'Nobody has been checked in for this event yet, so there are no addresses to copy.'
+    paintEmailList()
+    $('#copy-emails').disabled = $('#open-mail').disabled = attendeeEmails.length === 0
+  } catch (e) {
+    summary.textContent = errorText(e)
+  }
+  const subject = `Thank you for attending ${report.name}`
+  $('#thank-subject').value = subject
+  $('#thank-body').value = [
+    'Dear friend,',
+    '',
+    `Thank you for joining us at ${report.name} on ${formatDate(report.event_date)}. It was a joy to have you with us, and we pray that you were blessed.`,
+    '',
+    'We look forward to seeing you again at our next event.',
+    '',
+    'God bless you.',
+    '',
+    'Handmaidens of the Lord',
+  ].join(String.fromCharCode(10))
+}
+
+function initThankYou() {
+  const panel = $('#thank-panel')
+  const toggle = $('#thank-you')
+  toggle.addEventListener('click', async () => {
+    const open = panel.classList.contains('hidden')
+    panel.classList.toggle('hidden', !open)
+    toggle.setAttribute('aria-expanded', String(open))
+    if (open) {
+      await loadThankYou()
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  })
+  $('#outlook-sep').addEventListener('change', paintEmailList)
+  $('#copy-emails').addEventListener('click', () =>
+    copyText(attendeeEmails.join(emailSeparator()), `${attendeeEmails.length} email address(es) copied`)
+  )
+  $('#copy-subject').addEventListener('click', () => copyText($('#thank-subject').value, 'Subject copied'))
+  $('#copy-message').addEventListener('click', () => copyText($('#thank-body').value, 'Message copied'))
+  $('#open-mail').addEventListener('click', () => {
+    // BCC keeps attendees' addresses private from each other. Very long lists do not fit
+    // in a mailto link, so those must be pasted instead.
+    const bcc = attendeeEmails.join(',')
+    const href =
+      `mailto:?bcc=${encodeURIComponent(bcc)}` +
+      `&subject=${encodeURIComponent($('#thank-subject').value)}` +
+      `&body=${encodeURIComponent($('#thank-body').value)}`
+    if (href.length > 1800) {
+      toast('The list is too long for a link. Use “Copy emails” and paste into BCC.', 'error')
+      return
+    }
+    window.location.href = href
+  })
+}
+
 export async function initEventRegistrations() {
   const session = await requireAdmin('events')
   if (!session) return
@@ -210,6 +302,7 @@ export async function initEventRegistrations() {
     loadPage()
   })
   $('#export').addEventListener('click', exportCsv)
+  initThankYou()
 
   await loadPage()
 }

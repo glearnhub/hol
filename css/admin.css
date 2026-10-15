@@ -685,3 +685,16 @@ dialog::backdrop {
   object-fit: contain;
   position: relative;
 }
+
+/* ---- Thank-you email panel ---- */
+.check-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 44px;
+  font-size: 0.9rem;
+}
+#email-list {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 16px;
+}

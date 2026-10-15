@@ -316,6 +316,14 @@ Configuration**.
 * **Camera scanning** needs HTTPS (or localhost) and the user's permission; the
   search and manual-code methods work without a camera.
 
+## Thank-you emails to attendees
+
+On an event's **Registrations** page, **Thank-you email** lists the email addresses of
+everyone who was checked in (not just registered). Use **Copy emails**, paste them into the
+**BCC** box of your own email, and use the suggested subject and message (also copyable).
+Tick *Use semicolons* if your email program (Outlook) needs `;` between addresses. The site
+does not send emails itself.
+
 ## Link previews (thumbnail)
 
 When a page link is shared on WhatsApp, Facebook, X or similar, the preview shows the
