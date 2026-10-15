@@ -609,3 +609,55 @@ p {
     border: 1px solid #999;
   }
 }
+
+/* ---- Logo ---- */
+.brand-logo {
+  display: block;
+  object-fit: contain;
+}
+
+.hero-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+  align-items: center;
+}
+
+.hero-logo {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 1rem 1.5rem;
+  box-shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.45);
+  max-width: 340px;
+  justify-self: start;
+}
+
+.hero-logo img {
+  width: 100%;
+  height: auto;
+}
+
+@media (min-width: 860px) {
+  .hero-grid {
+    grid-template-columns: 1.2fr 0.8fr;
+  }
+  .hero-logo {
+    justify-self: end;
+    max-width: 400px;
+  }
+}
+
+.confirm-logo {
+  width: min(280px, 70%);
+  height: auto;
+  margin: 0 auto 0.5rem;
+}
+
+/* The emblem used as a poster placeholder stays small and centred. */
+.poster img.brand-logo {
+  width: 40%;
+  max-width: 130px;
+  height: auto;
+  object-fit: contain;
+  opacity: 0.9;
+}

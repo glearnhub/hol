@@ -2,19 +2,15 @@
 import { SITE } from './config.js'
 import { el, $ } from './ui.js'
 
-// Simple brand mark: a cross inside a soft circle.
+// The Handmaidens of the Lord emblem (ring and torch).
 export function brandMark(size = 40) {
-  const ns = 'http://www.w3.org/2000/svg'
-  const svg = document.createElementNS(ns, 'svg')
-  svg.setAttribute('viewBox', '0 0 48 48')
-  svg.setAttribute('width', String(size))
-  svg.setAttribute('height', String(size))
-  svg.setAttribute('aria-hidden', 'true')
-  svg.innerHTML =
-    '<circle cx="24" cy="24" r="23" fill="#EDE9FE" stroke="#7C3AED" stroke-width="1.5"/>' +
-    '<path d="M21 9h6v12h12v6H27v14h-6V27H9v-6h12z" fill="#4C1D95"/>' +
-    '<circle cx="24" cy="24" r="3" fill="#EDE9FE"/>'
-  return svg
+  return el('img', {
+    src: 'img/logo-emblem.png',
+    alt: '',
+    width: String(size),
+    height: String(size),
+    class: 'brand-logo',
+  })
 }
 
 export function renderPublicLayout(active = '') {

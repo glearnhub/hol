@@ -65,7 +65,7 @@ export async function initConfirmation() {
       'div',
       { class: 'card confirmation' },
       el('div', { class: 'success-mark', 'aria-hidden': 'true' }, '✓'),
-      el('p', { class: 'muted' }, 'Handmaidens of the Lord'),
+      el('img', { src: 'img/logo.png', alt: 'Handmaidens of the Lord', class: 'confirm-logo', width: '1064', height: '812' }),
       el('h1', {}, cancelled ? 'This registration is no longer active' : 'You are registered!'),
       el(
         'p',

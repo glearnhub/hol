@@ -190,3 +190,12 @@ body.checkin {
   font-size: 1.15rem;
   margin-top: 0.75rem;
 }
+
+/* ---- Logo ---- */
+.ci-logo {
+  display: block;
+  margin: 0 auto 0.4rem;
+  background: #fff;
+  border-radius: 50%;
+  padding: 4px;
+}

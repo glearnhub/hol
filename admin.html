@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex" />
     <title>Administrator login · Handmaidens of the Lord</title>
-    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="icon" type="image/png" sizes="64x64" href="img/favicon-64.png" />
+    <link rel="apple-touch-icon" href="img/apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -15,15 +16,9 @@
   <body class="admin">
     <div class="login-wrap">
       <div class="login-card">
-        <div class="brand-row">
-          <svg width="40" height="40" viewBox="0 0 48 48" aria-hidden="true">
-            <circle cx="24" cy="24" r="23" fill="#EDE9FE" stroke="#7C3AED" stroke-width="1.5"/>
-            <path d="M21 9h6v12h12v6H27v14h-6V27H9v-6h12z" fill="#4C1D95"/>
-          </svg>
-          <div>
-            <strong style="color:var(--primary)">Handmaidens of the Lord</strong><br />
-            <span class="muted">Administrator login</span>
-          </div>
+        <div class="login-logo">
+          <img src="img/logo.png" alt="Handmaidens of the Lord" width="1064" height="812" />
+          <p class="muted" style="margin:.25rem 0 0">Administrator login</p>
         </div>
         <div id="status" aria-live="polite"></div>
         <form id="login-form" novalidate>
