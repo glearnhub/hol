@@ -661,3 +661,116 @@ p {
   object-fit: contain;
   opacity: 0.9;
 }
+
+/* ---------------------------------------------------------------------------
+   Mobile and touch refinements
+   --------------------------------------------------------------------------- */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* No 300ms tap delay or accidental double-tap zoom on controls. */
+a, button, input, select, textarea, label, summary {
+  touch-action: manipulation;
+}
+
+body {
+  overflow-wrap: break-word;
+}
+
+/* Keep content clear of phone notches and rounded corners (landscape too). */
+.container {
+  padding-left: max(1.25rem, env(safe-area-inset-left));
+  padding-right: max(1.25rem, env(safe-area-inset-right));
+}
+
+#toast-host {
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+/* Long names, references and e-mail addresses must never push the page wider. */
+.reference {
+  max-width: 100%;
+  font-size: clamp(1.05rem, 5.2vw, 1.4rem);
+  overflow-wrap: anywhere;
+}
+
+.facts li {
+  flex-wrap: wrap;
+}
+
+.facts strong {
+  min-width: 0;
+  flex: 0 0 8.5rem;
+}
+
+.facts span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Comfortable thumb-sized targets on phones and touch screens. */
+@media (max-width: 760px), (pointer: coarse) {
+  .btn {
+    min-height: 44px;
+  }
+
+  .btn-small {
+    min-height: 44px;
+    padding: 0.55rem 1.1rem;
+  }
+
+  .brand {
+    min-height: 44px;
+  }
+
+  .site-nav a {
+    padding: 0.8rem 1rem;
+  }
+
+  .nav-toggle {
+    min-width: 44px;
+    min-height: 44px;
+    display: none;
+  }
+
+  .section-title a {
+    display: inline-block;
+    padding: 0.7rem 0;
+  }
+
+  .card-actions {
+    gap: 0.6rem;
+  }
+}
+
+@media (max-width: 760px) {
+  .nav-toggle {
+    display: block;
+  }
+
+  .container {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+
+  .hero {
+    padding: 2.5rem 0 3rem;
+  }
+
+  .card {
+    padding: 1.15rem;
+  }
+
+  .section {
+    padding: 2.25rem 0;
+  }
+
+  /* Full-width action buttons are easier to hit on a phone. */
+  .detail-layout .btn,
+  #form-wrap .btn {
+    width: 100%;
+  }
+}

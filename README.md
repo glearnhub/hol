@@ -124,6 +124,20 @@ How the policies work, in plain words:
   belong to a published event.
 * **Rate limits** slow down registration spam and token guessing (see below).
 
+## Mobile support
+
+The whole site is designed phone-first and was audited at 320, 360 and 390 px wide:
+
+* no horizontal scrolling on any page;
+* every button, link and field is at least 44 px tall (inputs are 16 px so iPhones
+  do not zoom in on focus);
+* admin tables turn into stacked cards on phones, and the event form opens full-screen;
+* the admin menu slides in and closes when you tap elsewhere;
+* content respects phone notches and rounded corners (`viewport-fit=cover`);
+* the volunteer check-in page works one-handed, with a large Mark Present button.
+
+Camera scanning needs HTTPS and the user's permission to use the camera.
+
 ## Volunteer check-in
 
 An administrator opens **Events → Check-in links**, gives the link a label (for

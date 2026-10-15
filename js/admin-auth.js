@@ -50,13 +50,51 @@ function renderShell(active, session) {
         class: 'menu-btn',
         type: 'button',
         'aria-label': 'Toggle menu',
-        onclick: () => sidebar.classList.toggle('open'),
+        'aria-expanded': 'false',
+        onclick: (e) => {
+          const open = sidebar.classList.toggle('open')
+          e.currentTarget.setAttribute('aria-expanded', String(open))
+        },
       },
       '☰'
     ),
-    el('span', { class: 'muted' }, session.user.email),
+    el('span', { class: 'muted topbar-email' }, session.user.email),
     el('button', { class: 'btn btn-outline btn-small', type: 'button', onclick: signOut }, 'Log out')
   )
+
+  // On phones the menu slides over the page: tapping anywhere else closes it.
+  document.addEventListener('click', (e) => {
+    if (!sidebar.classList.contains('open')) return
+    if (sidebar.contains(e.target) || e.target.closest('.menu-btn')) return
+    sidebar.classList.remove('open')
+    topbar.querySelector('.menu-btn')?.setAttribute('aria-expanded', 'false')
+  })
+}
+
+// Phones show tables as stacked cards. The CSS needs each cell to know its column
+// heading (data-label), so label cells as tables are drawn or redrawn.
+function labelTables() {
+  const label = () => {
+    for (const table of document.querySelectorAll('table.data')) {
+      const heads = [...table.querySelectorAll('thead th')].map((th) => th.textContent.trim())
+      for (const row of table.querySelectorAll('tbody tr')) {
+        ;[...row.children].forEach((cell, i) => {
+          if (cell.hasAttribute('data-label')) return
+          const heading = heads[i] || ''
+          cell.setAttribute('data-label', heading)
+          // Keep a cell's content together as one block beside its label.
+          if (heading && cell.childNodes.length > 0) {
+            const wrap = document.createElement('span')
+            wrap.className = 'cell-value'
+            wrap.append(...cell.childNodes)
+            cell.append(wrap)
+          }
+        })
+      }
+    }
+  }
+  new MutationObserver(label).observe(document.body, { childList: true, subtree: true })
+  label()
 }
 
 // Call at the top of every admin page. Resolves with the session, or redirects.
@@ -82,6 +120,7 @@ export async function requireAdmin(active) {
   }
 
   renderShell(active, session)
+  labelTables()
   main?.classList.remove('hidden')
 
   // If the session ends while the page is open, send the user back to log in.
