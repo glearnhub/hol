@@ -790,3 +790,51 @@ body {
   color: var(--accent);
 }
 
+
+/* ---------------------------------------------------------------------------
+   Posters: always show the whole image (no cropping, no stretching)
+   --------------------------------------------------------------------------- */
+.poster {
+  position: relative;
+  isolation: isolate;
+}
+
+/* A blurred copy of the poster fills any spare space around it. */
+.poster[style*='--poster-url']::before {
+  content: '';
+  position: absolute;
+  inset: -20px;
+  z-index: -1;
+  background-image: var(--poster-url);
+  background-size: cover;
+  background-position: center;
+  filter: blur(18px) saturate(1.1);
+  opacity: 0.85;
+}
+
+.poster img {
+  object-fit: contain;
+}
+
+/* Event page: show the poster at its own proportions. */
+.detail-poster .poster {
+  aspect-ratio: auto;
+  background: var(--accent);
+}
+
+.detail-poster .poster::before {
+  display: none;
+}
+
+.detail-poster .poster img {
+  width: 100%;
+  height: auto;
+  max-height: 85vh;
+  object-fit: contain;
+}
+
+.detail-poster .poster img.brand-logo {
+  width: 40%;
+  max-width: 160px;
+  margin: 3rem auto;
+}

@@ -16,11 +16,14 @@ export async function fetchPublicEvents() {
   return data || []
 }
 
+// Shows the WHOLE poster, never cropped or stretched. The same image, blurred, fills
+// the rest of the frame so portrait and landscape posters both look tidy.
 export function posterBlock(url, alt) {
+  const safe = url ? url.replace(/["\\()\s]/g, (c) => encodeURIComponent(c)) : ''
   return el(
     'div',
-    { class: 'poster' },
-    url ? el('img', { src: url, alt, loading: 'lazy' }) : brandMark(72)
+    { class: 'poster', style: url ? `--poster-url: url("${safe}")` : null },
+    url ? el('img', { src: url, alt, loading: 'lazy', decoding: 'async' }) : brandMark(72)
   )
 }
 

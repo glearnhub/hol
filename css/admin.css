@@ -662,3 +662,26 @@ dialog::backdrop {
     break-inside: avoid;
   }
 }
+
+/* Poster preview in the event form */
+.poster-preview {
+  margin: 0.5rem 0;
+}
+
+.poster-preview .poster {
+  aspect-ratio: 4 / 3;
+  max-width: 320px;
+  border-radius: 12px;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.poster-preview .poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  position: relative;
+}

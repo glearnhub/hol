@@ -2,7 +2,7 @@
 import QRCode from 'https://cdn.jsdelivr.net/npm/qrcode@1.5.4/+esm'
 import { supabase } from './supabase-client.js'
 import { requireAdmin } from './admin-auth.js'
-import { POSTER_BUCKET } from './posters.js'
+import { POSTER_BUCKET, posterUrls } from './posters.js'
 import { callRpc, eventStatusBadge, errorText } from './admin-common.js'
 import { el, $, param, formatDate, formatTimeRange, formatDateTime, notice, toast } from './ui.js'
 
@@ -96,6 +96,24 @@ async function cancelEvent(ev) {
   await setStatus(ev, 'cancelled')
 }
 
+let currentPosterUrl = null
+let previewObjectUrl = null
+
+// Shows (or hides) the poster preview in the event form.
+function setPosterPreview(url) {
+  const box = $('#poster-preview')
+  if (previewObjectUrl && url !== previewObjectUrl) {
+    URL.revokeObjectURL(previewObjectUrl)
+    previewObjectUrl = null
+  }
+  if (!url) {
+    box.classList.add('hidden')
+    return
+  }
+  box.querySelector('img').src = url
+  box.classList.remove('hidden')
+}
+
 // ---------------------------------------------------------------------------
 // Create / edit form
 // ---------------------------------------------------------------------------
@@ -136,7 +154,19 @@ function openEventForm(ev = null) {
     form.registration_closes_at.value = toLocalInput(ev.registration_closes_at)
   }
 
-  $('#poster-current').textContent = ev && ev.poster_path ? 'A poster is already uploaded. Choose a file to replace it.' : ''
+  // Show the poster that is already saved (if any), so the admin sees how it fits.
+  currentPosterUrl = null
+  setPosterPreview(null)
+  if (ev && ev.poster_path) {
+    $('#poster-current').textContent = 'A poster is already uploaded. Choose a file to replace it.'
+    posterUrls([ev.poster_path]).then((urls) => {
+      currentPosterUrl = urls.get(ev.poster_path) || null
+      // Only apply it if the same event form is still open.
+      if (editing && editing.id === ev.id && !$('#f-poster').files[0]) setPosterPreview(currentPosterUrl)
+    })
+  } else {
+    $('#poster-current').textContent = 'Best results: a portrait or square image at least 1000 px wide.'
+  }
   // Existing events keep their status here; publish/unpublish/cancel live on the list.
   $('#save-publish').classList.toggle('hidden', Boolean(ev))
   $('#save-draft').textContent = ev ? 'Save changes' : 'Save as draft'
@@ -423,6 +453,17 @@ export async function initManageEvents() {
       if (e.target === dialog) dialog.close()
     })
   }
+
+  // Preview a newly chosen poster straight away.
+  $('#f-poster').addEventListener('change', (e) => {
+    const file = e.target.files[0]
+    if (file && POSTER_TYPES[file.type] && file.size <= MAX_POSTER_BYTES) {
+      previewObjectUrl = URL.createObjectURL(file)
+      setPosterPreview(previewObjectUrl)
+    } else {
+      setPosterPreview(file ? null : currentPosterUrl)
+    }
+  })
 
   $('#event-form').addEventListener('submit', (e) => {
     e.preventDefault()

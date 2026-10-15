@@ -96,7 +96,11 @@
               <div class="field" data-field="poster">
                 <label for="f-poster">Poster (JPG, PNG or WebP, up to 2 MB)</label>
                 <input id="f-poster" name="poster" type="file" accept="image/jpeg,image/png,image/webp" />
-                <div id="poster-current" class="hint"></div>
+                <div id="poster-preview" class="poster-preview hidden">
+                  <div class="poster"><img alt="Poster preview" /></div>
+                  <div class="hint">This is how the poster will appear: the whole image, never cropped.</div>
+                </div>
+                <div id="poster-current" class="hint">Best results: a portrait or square image at least 1000 px wide.</div>
                 <div class="error"></div>
               </div>
               <div class="row-actions">
