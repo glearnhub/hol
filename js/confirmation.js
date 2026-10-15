@@ -175,7 +175,7 @@ export async function initConfirmation() {
         : el(
             'p',
             { class: 'muted' },
-            'Show this QR code at the entrance to check in. Tap “Save ticket as image” below, or ',
+            'Show this QR code at the entrance to check in. Tap “Download QR code” below, or ',
             el('strong', { class: 'highlight-word' }, 'TAKE A SCREENSHOT OF THIS PAGE'),
             ', so it is on your phone even without internet.'
           ),
@@ -201,7 +201,7 @@ export async function initConfirmation() {
                       person: data.full_name,
                       reference,
                     })
-                    const a = el('a', { href: ticket.toDataURL('image/png'), download: `${reference}-ticket.png` })
+                    const a = el('a', { href: ticket.toDataURL('image/png'), download: `${reference}-qr-code.png` })
                     document.body.append(a)
                     a.click()
                     a.remove()
@@ -210,7 +210,7 @@ export async function initConfirmation() {
                   }
                 },
               },
-              'Save ticket as image'
+              'Download QR code'
             )
           ),
       el(
