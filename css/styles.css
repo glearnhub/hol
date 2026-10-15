@@ -842,4 +842,12 @@ body {
 .highlight-word {
   color: var(--primary);
   font-weight: 700;
+  animation: blink-word 1s ease-in-out infinite;
+}
+@keyframes blink-word {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.15; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .highlight-word { animation: none; }
 }
