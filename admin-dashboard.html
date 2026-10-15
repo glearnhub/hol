@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>Dashboard · Handmaidens of the Lord</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/styles.css" />
+    <link rel="stylesheet" href="css/admin.css" />
+  </head>
+  <body class="admin">
+    <div class="admin-layout">
+      <aside id="admin-sidebar" aria-label="Administration menu"></aside>
+      <div class="admin-content">
+        <header id="admin-topbar"></header>
+        <main id="page" class="hidden">
+          <div class="page-title">
+            <h1>Dashboard</h1>
+            <div class="row-actions">
+              <a class="btn btn-primary" href="manage-events.html?new=1">+ New event</a>
+              <a class="btn btn-outline" href="reports.html">View reports</a>
+            </div>
+          </div>
+          <div id="status" aria-live="polite"></div>
+          <div id="stats" class="stats"></div>
+          <section class="panel">
+            <h2>Registrations and attendance by event</h2>
+            <div class="chart-box"><canvas id="chart" aria-label="Chart of registrations and attendance"></canvas></div>
+          </section>
+          <section class="panel">
+            <h2>Recent events</h2>
+            <div id="recent" class="table-wrap"></div>
+          </section>
+        </main>
+      </div>
+    </div>
+    <script type="module">
+      import { initDashboard } from './js/admin-dashboard.js'
+      initDashboard()
+    </script>
+  </body>
+</html>

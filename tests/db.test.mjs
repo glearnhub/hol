@@ -94,7 +94,8 @@ await db.exec(`
     bucket_id text, name text);
   alter table storage.objects enable row level security;
   grant usage on schema auth, storage to anon, authenticated;
-  grant select on storage.objects to anon, authenticated;
+  grant select on storage.objects to anon;
+  grant select, insert, update, delete on storage.objects to authenticated;
   grant execute on function auth.uid() to anon, authenticated;
 `)
 
@@ -443,6 +444,10 @@ const adm = await as('authenticated', () => db.query(`select name from storage.o
 check('admin can read every poster', adm.rows.length === 3)
 check('non-admin cannot upload posters',
   await denied(() => as('authenticated', () => db.query(`insert into storage.objects (bucket_id, name) values ('event-posters', 'posters/x.png')`), { uid: memberId })))
+check('admin can upload a poster',
+  (await as('authenticated', () => db.query(`insert into storage.objects (bucket_id, name) values ('event-posters', 'posters/new.png') returning name`), { uid: adminId })).rows.length === 1)
+check('admin cannot write outside the posters bucket',
+  await denied(() => as('authenticated', () => db.query(`insert into storage.objects (bucket_id, name) values ('private-files', 'x.png')`), { uid: adminId })))
 const bucket = (await db.query(`select public, file_size_limit, allowed_mime_types from storage.buckets where id = 'event-posters'`)).rows[0]
 check('poster bucket is private, 2 MB limit, images only',
   bucket.public === false && Number(bucket.file_size_limit) === 2097152 && bucket.allowed_mime_types.length === 3)

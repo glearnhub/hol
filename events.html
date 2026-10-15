@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Upcoming Events · Handmaidens of the Lord</title>
+    <meta name="description" content="Browse and register for upcoming events." />
+    <meta name="theme-color" content="#4C1D95" />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <div id="site-header"></div>
+
+    <main>
+      <div class="page-header">
+        <div class="container">
+          <h1>Upcoming events</h1>
+          <p class="muted" style="margin:0">Find an event and register in a minute.</p>
+        </div>
+      </div>
+      <section class="section">
+        <div class="container">
+          <div class="field-row" style="margin-bottom:1.5rem;align-items:end">
+            <div class="field" style="margin:0">
+              <label for="search">Search events</label>
+              <input id="search" type="search" placeholder="Search by name, venue or keyword" autocomplete="off" />
+            </div>
+            <label style="display:flex;gap:.5rem;align-items:center;margin-bottom:.7rem">
+              <input id="show-past" type="checkbox" /> Show past events
+            </label>
+          </div>
+          <div id="events-list" class="event-grid" aria-live="polite">
+            <p class="muted">Loading events…</p>
+          </div>
+        </div>
+      </section>
+    </main>
+    <div id="site-footer"></div>
+    <noscript><p class="container">This site needs JavaScript to work. Please enable it in your browser.</p></noscript>
+    <script type="module">
+      import { initEvents } from './js/public-events.js'
+      initEvents()
+    </script>
+  </body>
+</html>

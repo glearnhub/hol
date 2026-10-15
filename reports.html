@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>Reports · Handmaidens of the Lord</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/styles.css" />
+    <link rel="stylesheet" href="css/admin.css" />
+  </head>
+  <body class="admin">
+    <div class="admin-layout">
+      <aside id="admin-sidebar" aria-label="Administration menu"></aside>
+      <div class="admin-content">
+        <header id="admin-topbar"></header>
+        <main id="page" class="hidden">
+          <div class="page-title">
+            <h1>Attendance reports</h1>
+            <div class="row-actions no-print">
+              <button id="print" class="btn btn-outline" type="button">Print / save as PDF</button>
+            </div>
+          </div>
+          <div id="status" aria-live="polite"></div>
+          <section class="panel">
+            <h2>All events</h2>
+            <div id="overview" class="table-wrap"></div>
+          </section>
+          <section class="panel" id="detail-panel">
+            <div class="toolbar no-print">
+              <div class="field grow">
+                <label for="event-select">Event report</label>
+                <select id="event-select"></select>
+              </div>
+              <button id="export-participants" class="btn btn-primary" type="button">Export participants (CSV)</button>
+              <button id="export-churches" class="btn btn-outline" type="button">Export church summary (CSV)</button>
+            </div>
+            <div id="detail"></div>
+          </section>
+        </main>
+      </div>
+    </div>
+    <script type="module">
+      import { initReports } from './js/reports.js'
+      initReports()
+    </script>
+  </body>
+</html>

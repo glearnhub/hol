@@ -1,0 +1,136 @@
+// Home page and "Upcoming Events" listing.
+import { supabase, isConfigured } from './supabase-client.js'
+import { posterUrls } from './posters.js'
+import { renderPublicLayout, brandMark } from './layout.js'
+import { SITE } from './config.js'
+import {
+  el, $, formatDate, formatTimeRange, notice, notConfiguredNotice, REGISTRATION_STATE, debounce,
+} from './ui.js'
+
+export async function fetchPublicEvents() {
+  const { data, error } = await supabase
+    .from('public_events')
+    .select('*')
+    .order('event_date', { ascending: true })
+    .order('start_time', { ascending: true })
+  if (error) throw error
+  return data || []
+}
+
+export function posterBlock(url, alt) {
+  return el(
+    'div',
+    { class: 'poster' },
+    url ? el('img', { src: url, alt, loading: 'lazy' }) : brandMark(72)
+  )
+}
+
+export function stateBadge(state) {
+  const s = REGISTRATION_STATE[state] || REGISTRATION_STATE.closed
+  return el('span', { class: `badge badge-${s.tone}` }, s.label)
+}
+
+export function eventCard(ev, posterUrl) {
+  const open = ev.registration_state === 'open'
+  const spots =
+    open && ev.spots_remaining !== null && ev.spots_remaining !== undefined
+      ? `${ev.spots_remaining} space${ev.spots_remaining === 1 ? '' : 's'} left`
+      : null
+
+  return el(
+    'article',
+    { class: 'event-card' },
+    posterBlock(posterUrl, `Poster for ${ev.name}`),
+    el(
+      'div',
+      { class: 'event-card-body' },
+      stateBadge(ev.registration_state),
+      el('h3', {}, ev.name),
+      el('div', { class: 'meta' }, '📅', el('span', {}, `${formatDate(ev.event_date)} · ${formatTimeRange(ev.start_time, ev.end_time)}`)),
+      el('div', { class: 'meta' }, '📍', el('span', {}, ev.venue)),
+      spots ? el('div', { class: 'meta' }, '🎟️', el('span', {}, spots)) : null,
+      el(
+        'div',
+        { class: 'card-actions' },
+        open
+          ? el('a', { class: 'btn btn-primary btn-small', href: `register.html?id=${ev.id}` }, 'Register')
+          : null,
+        el('a', { class: 'btn btn-outline btn-small', href: `event-details.html?id=${ev.id}` }, 'View details')
+      )
+    )
+  )
+}
+
+async function renderEvents(host, events, emptyMessage) {
+  if (events.length === 0) {
+    host.replaceChildren(el('p', { class: 'muted' }, emptyMessage))
+    return
+  }
+  const urls = await posterUrls(events.map((e) => e.poster_path))
+  host.replaceChildren(...events.map((ev) => eventCard(ev, urls.get(ev.poster_path))))
+}
+
+function renderContactList() {
+  const list = $('#contact-list')
+  if (!list) return
+  const items = []
+  if (SITE.contactEmail) items.push(el('li', {}, 'Email: ', el('a', { href: `mailto:${SITE.contactEmail}` }, SITE.contactEmail)))
+  if (SITE.contactPhone) items.push(el('li', {}, 'Phone: ', el('a', { href: `tel:${SITE.contactPhone.replace(/\s+/g, '')}` }, SITE.contactPhone)))
+  if (SITE.location) items.push(el('li', {}, SITE.location))
+  list.replaceChildren(...(items.length ? items : [el('li', { class: 'muted' }, 'Contact details will be added soon.')]))
+}
+
+export async function initHome() {
+  renderPublicLayout('home')
+  renderContactList()
+  const host = $('#featured-events')
+  if (!isConfigured) {
+    host.replaceChildren(notConfiguredNotice())
+    return
+  }
+  try {
+    const events = (await fetchPublicEvents()).filter((e) => e.registration_state !== 'ended').slice(0, 6)
+    await renderEvents(host, events, 'There are no upcoming events right now. Please check back soon.')
+  } catch {
+    notice(host, 'We could not load events right now. Please try again shortly.', 'error')
+  }
+}
+
+export async function initEvents() {
+  renderPublicLayout('events')
+  const host = $('#events-list')
+  const search = $('#search')
+  const showPast = $('#show-past')
+
+  if (!isConfigured) {
+    host.replaceChildren(notConfiguredNotice())
+    return
+  }
+
+  let all = []
+  try {
+    all = await fetchPublicEvents()
+  } catch {
+    notice(host, 'We could not load events right now. Please try again shortly.', 'error')
+    return
+  }
+
+  const paint = async () => {
+    const q = search.value.trim().toLowerCase()
+    let list = all.filter((e) => showPast.checked || e.registration_state !== 'ended')
+    if (q) {
+      list = list.filter((e) =>
+        [e.name, e.venue, e.description].some((t) => (t || '').toLowerCase().includes(q))
+      )
+    }
+    await renderEvents(
+      host,
+      list,
+      q ? 'No events match your search.' : 'There are no upcoming events right now. Please check back soon.'
+    )
+  }
+
+  search.addEventListener('input', debounce(paint, 200))
+  showPast.addEventListener('change', paint)
+  await paint()
+}

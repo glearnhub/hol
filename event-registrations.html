@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>Registrations · Handmaidens of the Lord</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/styles.css" />
+    <link rel="stylesheet" href="css/admin.css" />
+  </head>
+  <body class="admin">
+    <div class="admin-layout">
+      <aside id="admin-sidebar" aria-label="Administration menu"></aside>
+      <div class="admin-content">
+        <header id="admin-topbar"></header>
+        <main id="page" class="hidden">
+          <div class="page-title">
+            <div>
+              <h1 id="event-name">Registrations</h1>
+              <div id="event-meta" class="muted"></div>
+            </div>
+            <div class="row-actions">
+              <a class="btn btn-outline" href="manage-events.html">← All events</a>
+              <button id="export" class="btn btn-primary" type="button">Export CSV</button>
+            </div>
+          </div>
+          <div id="status" aria-live="polite"></div>
+          <div id="stats" class="stats"></div>
+          <section class="panel">
+            <div class="toolbar">
+              <div class="field grow">
+                <label for="search">Search</label>
+                <input id="search" type="search" placeholder="Name, email, phone or church" autocomplete="off" />
+              </div>
+              <div class="field">
+                <label for="filter">Show</label>
+                <select id="filter">
+                  <option value="all">All registered</option>
+                  <option value="present">Present</option>
+                  <option value="not_checked_in">Not checked in</option>
+                  <option value="absent">Absent (after event)</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="sort">Sort by</label>
+                <select id="sort">
+                  <option value="created_desc">Newest registration</option>
+                  <option value="created_asc">Oldest registration</option>
+                  <option value="name_asc">Name A–Z</option>
+                  <option value="name_desc">Name Z–A</option>
+                  <option value="church_asc">Church A–Z</option>
+                  <option value="checkin_desc">Latest check-in</option>
+                </select>
+              </div>
+            </div>
+            <div id="table" class="table-wrap"></div>
+            <div class="pager">
+              <span id="range" class="muted"></span>
+              <div class="row-actions">
+                <button id="prev" class="btn btn-outline btn-small" type="button">Previous</button>
+                <button id="next" class="btn btn-outline btn-small" type="button">Next</button>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+    <script type="module">
+      import { initEventRegistrations } from './js/event-registrations.js'
+      initEventRegistrations()
+    </script>
+  </body>
+</html>

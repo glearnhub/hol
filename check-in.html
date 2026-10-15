@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Check-in · Handmaidens of the Lord</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/styles.css" />
+    <link rel="stylesheet" href="css/check-in.css" />
+  </head>
+  <body class="checkin">
+    <header class="ci-header">
+      <div class="ci-brand">Handmaidens of the Lord · Check-in</div>
+      <h1 id="event-name">Loading…</h1>
+      <div id="event-meta"></div>
+      <div id="counts" class="ci-counts"></div>
+    </header>
+
+    <main class="ci-main">
+      <div id="status" aria-live="polite"></div>
+
+      <div id="app" class="hidden">
+        <div class="ci-tabs" role="tablist">
+          <button id="tab-scan" class="active" role="tab" type="button" aria-selected="true">Scan QR code</button>
+          <button id="tab-search" role="tab" type="button" aria-selected="false">Search</button>
+        </div>
+
+        <!-- Result of the last action: green, amber or red -->
+        <div id="result" class="ci-result hidden" role="status" aria-live="assertive"></div>
+
+        <section id="panel-scan">
+          <div class="ci-card">
+            <div id="reader"></div>
+            <p id="camera-note" class="muted"></p>
+            <div class="ci-actions">
+              <button id="camera-toggle" class="btn btn-primary" type="button">Start camera</button>
+            </div>
+          </div>
+
+          <div class="ci-card">
+            <h2>Camera not working?</h2>
+            <form id="manual-form" novalidate>
+              <label for="manual-code">Enter the code printed under the QR code (e.g. HOL-1A2B3C4D)</label>
+              <div class="ci-row">
+                <input id="manual-code" type="text" autocomplete="off" autocapitalize="characters" maxlength="200" placeholder="HOL-XXXXXXXX" />
+                <button class="btn btn-secondary" type="submit">Check in</button>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <section id="panel-search" class="hidden">
+          <div class="ci-card">
+            <label for="search">Search by participant name or phone number</label>
+            <input id="search" type="search" autocomplete="off" placeholder="Search by participant name or phone number" />
+            <p class="muted" style="margin:.5rem 0 0">Type at least 3 characters.</p>
+          </div>
+          <div id="matches"></div>
+          <div id="confirm" class="ci-card hidden"></div>
+        </section>
+      </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script type="module" src="js/check-in.js"></script>
+  </body>
+</html>

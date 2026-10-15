@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>Administrator login · Handmaidens of the Lord</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/styles.css" />
+    <link rel="stylesheet" href="css/admin.css" />
+  </head>
+  <body class="admin">
+    <div class="login-wrap">
+      <div class="login-card">
+        <div class="brand-row">
+          <svg width="40" height="40" viewBox="0 0 48 48" aria-hidden="true">
+            <circle cx="24" cy="24" r="23" fill="#EDE9FE" stroke="#7C3AED" stroke-width="1.5"/>
+            <path d="M21 9h6v12h12v6H27v14h-6V27H9v-6h12z" fill="#4C1D95"/>
+          </svg>
+          <div>
+            <strong style="color:var(--primary)">Handmaidens of the Lord</strong><br />
+            <span class="muted">Administrator login</span>
+          </div>
+        </div>
+        <div id="status" aria-live="polite"></div>
+        <form id="login-form" novalidate>
+          <div class="field">
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" autocomplete="username" required />
+          </div>
+          <div class="field">
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" required />
+          </div>
+          <button id="login-btn" class="btn btn-primary" type="submit" style="width:100%">Sign in</button>
+        </form>
+        <p class="muted" style="margin:1rem 0 0;font-size:.85rem">
+          Administrator accounts are created by the site owner. <a href="index.html">Back to the public site</a>
+        </p>
+      </div>
+    </div>
+    <script type="module">
+      import { initLogin } from './js/admin-auth.js'
+      initLogin()
+    </script>
+  </body>
+</html>

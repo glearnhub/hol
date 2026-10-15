@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Event · Handmaidens of the Lord</title>
+    <meta name="description" content="Event details and registration." />
+    <meta name="theme-color" content="#4C1D95" />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <div id="site-header"></div>
+
+    <main>
+      <div class="container" id="event-detail" aria-live="polite">
+        <p class="muted" style="padding:2rem 0">Loading event…</p>
+      </div>
+    </main>
+    <div id="site-footer"></div>
+    <noscript><p class="container">This site needs JavaScript to work. Please enable it in your browser.</p></noscript>
+    <script type="module">
+      import { initEventDetails } from './js/event-details.js'
+      initEventDetails()
+    </script>
+  </body>
+</html>

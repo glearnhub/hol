@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Handmaidens of the Lord</title>
+    <meta name="description" content="Events, registration and attendance for the Handmaidens of the Lord fellowship." />
+    <meta name="theme-color" content="#4C1D95" />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <div id="site-header"></div>
+
+    <main>
+      <section class="hero">
+        <div class="container">
+          <h1>Handmaidens of the Lord</h1>
+          <p>A fellowship of women growing together in faith, prayer and service. Join us at our conferences, prayer meetings and gatherings.</p>
+          <a class="btn btn-light" href="events.html">Explore Events</a>
+          <p class="verse">"Behold the handmaid of the Lord; be it unto me according to thy word." — Luke 1:38</p>
+        </div>
+      </section>
+
+      <section class="section" id="events">
+        <div class="container">
+          <div class="section-title">
+            <h2>Upcoming events</h2>
+            <a href="events.html">See all events →</a>
+          </div>
+          <div id="featured-events" class="event-grid" aria-live="polite">
+            <p class="muted">Loading events…</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section-alt" id="about">
+        <div class="container narrow">
+          <h2>About us</h2>
+          <p>Handmaidens of the Lord is a women's fellowship that gathers to worship, learn from the Word, pray for one another and serve our communities. Everyone is welcome.</p>
+          <p>Register for an upcoming event, receive your personal QR code, and check in quickly when you arrive.</p>
+        </div>
+      </section>
+
+      <section class="section" id="contact">
+        <div class="container narrow">
+          <h2>Contact</h2>
+          <p>For questions about an event or registration, please reach out to the organisers using the details below.</p>
+          <ul id="contact-list" class="footer-links" style="color:var(--text)"></ul>
+        </div>
+      </section>
+    </main>
+    <div id="site-footer"></div>
+    <noscript><p class="container">This site needs JavaScript to work. Please enable it in your browser.</p></noscript>
+    <script type="module">
+      import { initHome } from './js/public-events.js'
+      initHome()
+    </script>
+  </body>
+</html>

@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>Manage events · Handmaidens of the Lord</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/styles.css" />
+    <link rel="stylesheet" href="css/admin.css" />
+  </head>
+  <body class="admin">
+    <div class="admin-layout">
+      <aside id="admin-sidebar" aria-label="Administration menu"></aside>
+      <div class="admin-content">
+        <header id="admin-topbar"></header>
+        <main id="page" class="hidden">
+          <div class="page-title">
+            <h1>Events</h1>
+            <button id="new-event" class="btn btn-primary" type="button">+ New event</button>
+          </div>
+          <div id="status" aria-live="polite"></div>
+          <section class="panel">
+            <div id="events" class="table-wrap"></div>
+          </section>
+
+          <dialog id="event-dialog" aria-labelledby="event-dialog-title">
+            <div class="dialog-head">
+              <h2 id="event-dialog-title">New event</h2>
+              <button class="btn btn-outline btn-small" type="button" data-close>Close</button>
+            </div>
+            <form id="event-form" class="dialog-body" novalidate>
+              <div id="form-status" aria-live="polite"></div>
+              <div class="field" data-field="name">
+                <label for="f-name">Event name</label>
+                <input id="f-name" name="event_name" type="text" maxlength="150" required />
+                <div class="error"></div>
+              </div>
+              <div class="field" data-field="description">
+                <label for="f-description">Description</label>
+                <textarea id="f-description" name="description" rows="5" maxlength="5000"></textarea>
+                <div class="error"></div>
+              </div>
+              <div class="field" data-field="venue">
+                <label for="f-venue">Venue</label>
+                <input id="f-venue" name="venue" type="text" maxlength="200" required />
+                <div class="error"></div>
+              </div>
+              <div class="field-row">
+                <div class="field" data-field="event_date">
+                  <label for="f-date">Event date</label>
+                  <input id="f-date" name="event_date" type="date" required />
+                  <div class="error"></div>
+                </div>
+                <div class="field" data-field="start_time">
+                  <label for="f-start">Start time</label>
+                  <input id="f-start" name="start_time" type="time" required />
+                  <div class="error"></div>
+                </div>
+                <div class="field" data-field="end_time">
+                  <label for="f-end">End time (optional)</label>
+                  <input id="f-end" name="end_time" type="time" />
+                  <div class="error"></div>
+                </div>
+              </div>
+              <div class="field-row">
+                <div class="field" data-field="capacity">
+                  <label for="f-capacity">Capacity</label>
+                  <input id="f-capacity" name="capacity" type="number" min="1" step="1" required />
+                  <div class="error"></div>
+                </div>
+                <div class="field">
+                  <label for="f-show">Show spaces remaining</label>
+                  <select id="f-show" name="show_remaining">
+                    <option value="true">Yes, show it publicly</option>
+                    <option value="false">No, keep it private</option>
+                  </select>
+                </div>
+              </div>
+              <div class="field-row">
+                <div class="field" data-field="registration_opens_at">
+                  <label for="f-opens">Registration opens (optional)</label>
+                  <input id="f-opens" name="registration_opens_at" type="datetime-local" />
+                  <div class="error"></div>
+                </div>
+                <div class="field" data-field="registration_closes_at">
+                  <label for="f-closes">Registration closes (optional)</label>
+                  <input id="f-closes" name="registration_closes_at" type="datetime-local" />
+                  <div class="error"></div>
+                </div>
+              </div>
+              <div class="field" data-field="poster">
+                <label for="f-poster">Poster (JPG, PNG or WebP, up to 2 MB)</label>
+                <input id="f-poster" name="poster" type="file" accept="image/jpeg,image/png,image/webp" />
+                <div id="poster-current" class="hint"></div>
+                <div class="error"></div>
+              </div>
+              <div class="row-actions">
+                <button id="save-draft" class="btn btn-outline" type="submit" data-status="draft">Save as draft</button>
+                <button id="save-publish" class="btn btn-primary" type="submit" data-status="published">Save and publish</button>
+              </div>
+            </form>
+          </dialog>
+
+          <dialog id="links-dialog" aria-labelledby="links-title">
+            <div class="dialog-head">
+              <h2 id="links-title">Volunteer check-in links</h2>
+              <button class="btn btn-outline btn-small" type="button" data-close>Close</button>
+            </div>
+            <div class="dialog-body">
+              <p class="muted">Share a link with each check-in volunteer. They need no account. Each link only works for this event and can be revoked at any time.</p>
+              <div id="links-status" aria-live="polite"></div>
+              <form id="link-form" class="toolbar" novalidate>
+                <div class="field grow">
+                  <label for="l-label">Label</label>
+                  <input id="l-label" type="text" maxlength="60" placeholder="e.g. Main door" required />
+                </div>
+                <div class="field">
+                  <label for="l-days">Valid for</label>
+                  <select id="l-days">
+                    <option value="1">1 day</option>
+                    <option value="3" selected>3 days</option>
+                    <option value="7">7 days</option>
+                    <option value="30">30 days</option>
+                  </select>
+                </div>
+                <button class="btn btn-primary" type="submit">Create link</button>
+              </form>
+              <div id="new-link"></div>
+              <div id="links-list" class="table-wrap"></div>
+            </div>
+          </dialog>
+        </main>
+      </div>
+    </div>
+    <script type="module">
+      import { initManageEvents } from './js/manage-events.js'
+      initManageEvents()
+    </script>
+  </body>
+</html>

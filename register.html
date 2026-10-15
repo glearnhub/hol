@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Register · Handmaidens of the Lord</title>
+    <meta name="description" content="Register for an event." />
+    <meta name="theme-color" content="#4C1D95" />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <div id="site-header"></div>
+
+    <main>
+      <div class="page-header">
+        <div class="container">
+          <h1>Event registration</h1>
+        </div>
+      </div>
+      <section class="section">
+        <div class="container narrow">
+          <div id="event-summary"></div>
+          <div id="status" aria-live="polite"></div>
+          <div id="form-wrap" class="card hidden">
+            <form id="register-form" novalidate>
+              <div class="field" data-field="fullName">
+                <label for="fullName">Full name</label>
+                <input id="fullName" name="fullName" type="text" autocomplete="name" maxlength="100" required />
+                <div class="error" role="alert"></div>
+              </div>
+              <div class="field" data-field="email">
+                <label for="email">Email address</label>
+                <input id="email" name="email" type="email" autocomplete="email" maxlength="254" required />
+                <div class="error" role="alert"></div>
+              </div>
+              <div class="field" data-field="phone">
+                <label for="phone">Phone number</label>
+                <input id="phone" name="phone" type="tel" autocomplete="tel" inputmode="tel" placeholder="0712 345 678" required />
+                <div class="hint">Use a number you can be reached on.</div>
+                <div class="error" role="alert"></div>
+              </div>
+              <div class="field" data-field="church">
+                <label for="church">Church name</label>
+                <input id="church" name="church" type="text" maxlength="150" required />
+                <div class="error" role="alert"></div>
+              </div>
+              <button id="submit-btn" class="btn btn-primary" type="submit">Complete registration</button>
+            </form>
+          </div>
+        </div>
+      </section>
+    </main>
+    <div id="site-footer"></div>
+    <noscript><p class="container">This site needs JavaScript to work. Please enable it in your browser.</p></noscript>
+    <script type="module">
+      import { initRegistration } from './js/registration.js'
+      initRegistration()
+    </script>
+  </body>
+</html>
