@@ -774,3 +774,23 @@ body {
     width: 100%;
   }
 }
+
+/* Designer credit in the footer */
+.credit-link {
+  display: inline-block;
+  margin-top: 0.2rem;
+  padding: 0.75rem 0;
+  color: #fff;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.credit-link:hover {
+  color: var(--accent);
+}
+
+.credit-wa {
+  opacity: 0.85;
+  font-weight: 600;
+}

@@ -10,3 +10,12 @@ export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 export const SITE = {
   name: 'Handmaidens of the Lord',
 }
+
+// Designer credit shown in the footer. It is a WhatsApp link that opens a chat
+// with the number below and the message pre-filled.
+export const CREDIT = {
+  designer: 'Gideon Kiplangat',
+  company: 'Tekipra Systems',
+  whatsapp: '0702499324',
+  message: 'Hello Tekipra Systems, I saw your work on the Handmaidens of the Lord website and I would like to talk about a project.',
+}
