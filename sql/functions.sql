@@ -28,7 +28,7 @@ create or replace function private.event_end_at(e public.events)
 returns timestamptz
 language sql
 stable
-as $$ select (e.event_date + coalesce(e.end_time, time '23:59:59')) at time zone private.event_tz() $$;
+as $$ select (coalesce(e.end_date, e.event_date) + coalesce(e.end_time, time '23:59:59')) at time zone private.event_tz() $$;
 
 -- New random secret: two UUIDv4 values, about 244 bits of randomness.
 create or replace function private.new_token()
@@ -195,12 +195,14 @@ select
   case
     -- Inline on purpose: functions inside a view run with the CALLER's privileges,
     -- and anonymous visitors must not be given access to the private schema.
-    when now() > (e.event_date + coalesce(e.end_time, time '23:59:59')) at time zone 'Africa/Nairobi' then 'ended'
+    when now() > (coalesce(e.end_date, e.event_date) + coalesce(e.end_time, time '23:59:59')) at time zone 'Africa/Nairobi' then 'ended'
     when e.registration_opens_at is not null and now() < e.registration_opens_at then 'not_open'
     when e.registration_closes_at is not null and now() > e.registration_closes_at then 'closed'
     when c.taken >= e.capacity then 'full'
     else 'open'
-  end as registration_state
+  end as registration_state,
+  -- Appended last: CREATE OR REPLACE VIEW can only add columns at the end.
+  e.end_date
 from public.events e
 cross join lateral (
   select count(*)::integer as taken
@@ -316,7 +318,7 @@ begin
     'full_name', v_name,
     'event', jsonb_build_object(
       'id', ev.id, 'name', ev.name, 'venue', ev.venue, 'event_date', ev.event_date,
-      'start_time', ev.start_time, 'end_time', ev.end_time
+      'start_time', ev.start_time, 'end_date', ev.end_date, 'end_time', ev.end_time
     )
   );
 end;
@@ -360,7 +362,7 @@ begin
     'checked_in', exists (select 1 from public.attendance a where a.registration_id = r.id),
     'event', jsonb_build_object(
       'id', ev.id, 'name', ev.name, 'venue', ev.venue, 'event_date', ev.event_date,
-      'start_time', ev.start_time, 'end_time', ev.end_time, 'status', ev.status
+      'start_time', ev.start_time, 'end_date', ev.end_date, 'end_time', ev.end_time, 'status', ev.status
     )
   );
 end;
@@ -541,7 +543,7 @@ begin
     'label', v.label,
     'event', jsonb_build_object(
       'name', ev.name, 'venue', ev.venue, 'event_date', ev.event_date,
-      'start_time', ev.start_time, 'end_time', ev.end_time
+      'start_time', ev.start_time, 'end_date', ev.end_date, 'end_time', ev.end_time
     ),
     'registered', (select count(*) from public.registrations
                    where event_id = ev.id and status = 'registered'),
@@ -943,6 +945,7 @@ as $$
     'venue', e.venue,
     'event_date', e.event_date,
     'start_time', e.start_time,
+    'end_date', e.end_date,
     'end_time', e.end_time,
     'status', e.status,
     'capacity', e.capacity,
@@ -1040,7 +1043,7 @@ begin
     'ok', true,
     'total_events', (select count(*) from public.events),
     'upcoming_events', (select count(*) from public.events
-                        where status = 'published' and event_date >= today),
+                        where status = 'published' and coalesce(end_date, event_date) >= today),
     'total_registrations', (select count(*) from public.registrations where status = 'registered'),
     'total_attendees', (select count(*) from public.attendance a
                         join public.registrations r on r.id = a.registration_id

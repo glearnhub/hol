@@ -391,6 +391,23 @@ const tonightReg = await reg(evTonight, 81, {}, { ip: '10.7.0.5' })
 const tonightCi = await as('anon', () => rpc('volunteer_check_in_qr', { p_token: tonightLink.token, p_code: tonightReg.qr_token }), { ip: '10.7.0.6' })
 check('check-in works for an 8 pm event on the day', tonightReg.ok && tonightCi.ok && tonightCi.result === 'checked_in', JSON.stringify([tonightReg, tonightCi]))
 
+// An overnight event (a kesha) ends on a later day than it starts.
+const evKesha = await makeEvent('Kesha Night', 5, { date: daysAhead(-3) })
+await db.query(`update public.events set start_time = '20:00', end_date = $2, end_time = '05:00' where id = $1`, [evKesha, daysAhead(1)])
+const keshaView = (await db.query(`select registration_state, end_date::text from public.public_events where id = $1`, [evKesha])).rows[0]
+check('event ending on a later day is not "ended" while it is running', keshaView.registration_state === 'open', JSON.stringify(keshaView))
+const keshaLink = await as('authenticated', () => rpc('admin_create_volunteer_link', { p_event_id: evKesha, p_label: 'x', p_expires_at: new Date(Date.now() + 86400000).toISOString() }), { uid: adminId })
+const keshaReg = await reg(evKesha, 82, {}, { ip: '10.7.0.7' })
+const keshaCi = await as('anon', () => rpc('volunteer_check_in_qr', { p_token: keshaLink.token, p_code: keshaReg.qr_token }), { ip: '10.7.0.8' })
+check('check-in works for an overnight event until its end date', keshaReg.ok && keshaCi.ok && keshaCi.result === 'checked_in', JSON.stringify([keshaReg, keshaCi]))
+const badEnd = async (sqlText) => { try { await db.query(sqlText); return false } catch { return true } }
+check('end date before the start date is rejected',
+  await badEnd(`update public.events set end_date = event_date - 1 where id = '${evKesha}'`))
+check('same-day end time before the start is rejected',
+  await badEnd(`update public.events set end_date = null, start_time = '20:00', end_time = '05:00' where id = '${evKesha}'`))
+check('later end date with an earlier clock time is accepted',
+  !(await badEnd(`update public.events set end_date = event_date + 1, start_time = '20:00', end_time = '05:00' where id = '${evKesha}'`)))
+
 // ===========================================================================
 console.log('\n6. Admin attendance and reports')
 // ===========================================================================

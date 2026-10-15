@@ -4,6 +4,7 @@ import { posterUrls } from './posters.js'
 import { renderPublicLayout, brandMark } from './layout.js'
 import {
   el, $, formatDate, formatTimeRange, notice, notConfiguredNotice, REGISTRATION_STATE, debounce,
+  formatSchedule,
 } from './ui.js'
 
 export async function fetchPublicEvents() {
@@ -48,7 +49,7 @@ export function eventCard(ev, posterUrl) {
       { class: 'event-card-body' },
       stateBadge(ev.registration_state),
       el('h3', {}, ev.name),
-      el('div', { class: 'meta' }, '📅', el('span', {}, `${formatDate(ev.event_date)} · ${formatTimeRange(ev.start_time, ev.end_time)}`)),
+      el('div', { class: 'meta' }, '📅', el('span', {}, `${formatSchedule(ev)}`)),
       el('div', { class: 'meta' }, '📍', el('span', {}, ev.venue)),
       spots ? el('div', { class: 'meta' }, '🎟️', el('span', {}, spots)) : null,
       el(

@@ -4,6 +4,7 @@
 import { createAnonymousClient, isConfigured } from './supabase-client.js'
 import {
   el, $, formatDate, formatTimeRange, formatDateTime, debounce, notConfiguredNotice, CHECKIN_ERRORS,
+  formatSchedule,
 } from './ui.js'
 
 const db = createAnonymousClient()
@@ -74,7 +75,7 @@ async function loadEvent(first = false) {
   }
   $('#event-name').textContent = data.event.name
   $('#event-meta').textContent =
-    `${formatDate(data.event.event_date)} · ${formatTimeRange(data.event.start_time, data.event.end_time)} · ${data.event.venue}`
+    `${formatSchedule(data.event)} · ${data.event.venue}`
   $('#counts').textContent = `${data.checked_in} of ${data.registered} checked in`
   if (first) {
     status.replaceChildren()

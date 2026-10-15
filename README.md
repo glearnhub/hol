@@ -179,6 +179,13 @@ rehearse) until **one day after** it ends, in Nairobi time. Outside that window 
 check-in screen says exactly when it opens and closes. Duplicate check-ins report "Already checked in" and create no new
 record.
 
+**Overnight events:** each event has an optional **End date** and **End time**. Leave the
+end date empty for a same-day event; for a night vigil (a "kesha") that starts on Friday at
+8 pm and finishes on Saturday at 5 am, set the end date to Saturday and the end time to
+5:00 AM. The event stays open for registration and check-in until that end moment (plus the
+one-day grace period above). If your database was created before this feature, re-run
+`sql/schema.sql`, then `sql/functions.sql`, then `sql/policies.sql`.
+
 ## Reports and exports
 
 * **Dashboard:** total and upcoming events, registrations, attendees, absentees

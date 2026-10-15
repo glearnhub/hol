@@ -4,6 +4,7 @@ import { callRpc, attendanceBadge, attendanceLabel, errorText } from './admin-co
 import {
   el, $, param, isUuid, formatDate, formatTimeRange, formatDateTime, notice, toast, toCsv, downloadFile,
   debounce, slug,
+  formatSchedule,
 } from './ui.js'
 
 const PAGE_SIZE = 20
@@ -22,7 +23,7 @@ async function loadReport() {
   ended = report.completed
   $('#event-name').textContent = report.name
   $('#event-meta').textContent =
-    `${formatDate(report.event_date)} · ${formatTimeRange(report.start_time, report.end_time)} · ${report.venue}`
+    `${formatSchedule(report)} · ${report.venue}`
   document.title = `${report.name} registrations · Handmaidens of the Lord`
 
   $('#stats').replaceChildren(

@@ -49,6 +49,18 @@ export function formatTimeRange(start, end) {
   return end ? `${formatTime(start)} – ${formatTime(end)}` : formatTime(start)
 }
 
+// An event may end on a later day than it starts (an all-night vigil, a retreat).
+export function isMultiDay(ev) {
+  return Boolean(ev.end_date) && String(ev.end_date).slice(0, 10) !== String(ev.event_date).slice(0, 10)
+}
+
+// One readable line for when an event happens, same-day or overnight.
+export function formatSchedule(ev) {
+  if (!isMultiDay(ev)) return `${formatDate(ev.event_date)} · ${formatTimeRange(ev.start_time, ev.end_time)}`
+  const end = ev.end_time ? `${formatDate(ev.end_date)}, ${formatTime(ev.end_time)}` : formatDate(ev.end_date)
+  return `${formatDate(ev.event_date)}, ${formatTime(ev.start_time)} → ${end}`
+}
+
 export function formatDateTime(iso) {
   if (!iso) return ''
   return new Date(iso).toLocaleString(undefined, {

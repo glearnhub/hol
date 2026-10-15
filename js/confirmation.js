@@ -5,6 +5,7 @@ import { supabase, isConfigured } from './supabase-client.js'
 import { renderPublicLayout } from './layout.js'
 import {
   el, $, param, formatDate, formatTimeRange, notice, notConfiguredNotice, toast,
+  formatSchedule,
 } from './ui.js'
 
 function readToken(reference) {
@@ -75,7 +76,7 @@ export async function initConfirmation() {
           : `Thank you, ${data.full_name}. Your place has been reserved.`
       ),
       el('h2', {}, ev.name),
-      el('p', {}, `${formatDate(ev.event_date)} · ${formatTimeRange(ev.start_time, ev.end_time)}`),
+      el('p', {}, `${formatSchedule(ev)}`),
       el('p', {}, `📍 ${ev.venue}`),
       el('div', { class: 'reference' }, data.registration_reference),
       cancelled ? null : el('div', {}, el('div', { class: 'qr-box' }, canvas)),

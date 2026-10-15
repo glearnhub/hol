@@ -5,6 +5,7 @@ import { callRpc, errorText } from './admin-common.js'
 import { fetchAllRegistrations } from './event-registrations.js'
 import {
   el, $, param, isUuid, formatDate, formatTimeRange, notice, toast, toCsv, downloadFile, slug,
+  formatSchedule,
 } from './ui.js'
 
 let current = null // { report, participants }
@@ -43,7 +44,7 @@ function renderReport() {
         { class: 'report-title' },
         el('h2', {}, 'Attendance report'),
         el('div', { class: 'report-event' }, r.name),
-        el('div', { class: 'muted' }, `${formatDate(r.event_date)} · ${formatTimeRange(r.start_time, r.end_time)}`),
+        el('div', { class: 'muted' }, `${formatSchedule(r)}`),
         el('div', { class: 'muted' }, r.venue),
         el('div', { class: 'muted report-generated' }, `Generated ${new Date().toLocaleString()}`)
       )

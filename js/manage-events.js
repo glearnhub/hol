@@ -4,7 +4,7 @@ import { supabase } from './supabase-client.js'
 import { requireAdmin } from './admin-auth.js'
 import { POSTER_BUCKET, posterUrls } from './posters.js'
 import { callRpc, eventStatusBadge, errorText } from './admin-common.js'
-import { el, $, param, formatDate, formatTimeRange, formatDateTime, notice, toast } from './ui.js'
+import { el, $, param, formatDate, formatTimeRange, formatSchedule, formatDateTime, notice, toast } from './ui.js'
 
 const MAX_POSTER_BYTES = 2 * 1024 * 1024
 const POSTER_TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }
@@ -62,7 +62,7 @@ function renderEvents() {
       'tr',
       {},
       el('td', {}, el('strong', {}, ev.name), el('div', { class: 'muted' }, ev.venue)),
-      el('td', {}, formatDate(ev.event_date), el('div', { class: 'muted' }, formatTimeRange(ev.start_time, ev.end_time))),
+      el('td', {}, formatDate(ev.event_date), el('div', { class: 'muted' }, formatSchedule(ev).slice(formatDate(ev.event_date).length).replace(/^[ ,·]+/, ''))),
       el('td', {}, eventStatusBadge(ev.status)),
       el('td', {}, `${c.registrations} / ${ev.capacity}`, el('div', { class: 'muted' }, `${c.attendees} attended`)),
       el('td', {}, actions)
@@ -145,8 +145,9 @@ function openEventForm(ev = null) {
     form.event_name.value = ev.name
     form.description.value = ev.description || ''
     form.venue.value = ev.venue
-    form.event_date.value = ev.event_date
+    form.event_date.value = String(ev.event_date).slice(0, 10)
     form.start_time.value = (ev.start_time || '').slice(0, 5)
+    form.end_date.value = ev.end_date ? String(ev.end_date).slice(0, 10) : ''
     form.end_time.value = (ev.end_time || '').slice(0, 5)
     form.capacity.value = ev.capacity
     form.show_remaining.value = String(ev.show_remaining)
@@ -182,6 +183,7 @@ function readForm(form) {
     venue: form.venue.value.trim(),
     event_date: form.event_date.value,
     start_time: form.start_time.value,
+    end_date: form.end_date.value || null,
     end_time: form.end_time.value || null,
     capacity: num(form.capacity.value),
     show_remaining: form.show_remaining.value === 'true',
@@ -197,13 +199,20 @@ function validate(v) {
   if (v.venue.length < 2 || v.venue.length > 200) errors.venue = 'Enter the venue.'
   if (!v.event_date) errors.event_date = 'Choose the event date.'
   if (!v.start_time) errors.start_time = 'Choose a start time.'
-  if (v.end_time && v.start_time && v.end_time <= v.start_time) errors.end_time = 'End time must be after the start time.'
+  if (v.end_date && v.event_date && v.end_date < v.event_date) {
+    errors.end_date = 'The end date cannot be before the event date.'
+  } else if (v.end_time && v.start_time && (v.end_date || v.event_date) === v.event_date && v.end_time <= v.start_time) {
+    errors.end_time = 'End time must be after the start time, or choose a later end date.'
+  } else if (v.end_date && v.end_date !== v.event_date && !v.end_time) {
+    errors.end_time = 'Choose the time the event ends on the end date.'
+  }
   if (!Number.isInteger(v.capacity) || v.capacity < 1) errors.capacity = 'Capacity must be a whole number of at least 1.'
   if (v.opens && v.closes && v.closes <= v.opens) errors.registration_closes_at = 'Registration must close after it opens.'
   if (v.closes && v.event_date && v.start_time) {
-    const eventStart = new Date(`${v.event_date}T${v.start_time}`)
-    if (v.closes > new Date(eventStart.getTime() + 24 * 3600 * 1000)) {
-      errors.registration_closes_at = 'Registration should close by the end of the event day.'
+    const lastDay = v.end_date || v.event_date
+    const eventEnd = new Date(`${lastDay}T${v.end_time || '23:59'}`)
+    if (v.closes > new Date(eventEnd.getTime() + 3600 * 1000)) {
+      errors.registration_closes_at = 'Registration should close by the time the event ends.'
     }
   }
   if (v.file) {
@@ -245,6 +254,7 @@ async function saveEvent(statusChoice) {
       venue: v.venue,
       event_date: v.event_date,
       start_time: v.start_time,
+      end_date: v.end_date,
       end_time: v.end_time,
       capacity: v.capacity,
       show_remaining: v.show_remaining,

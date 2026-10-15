@@ -4,7 +4,8 @@ import { posterUrls } from './posters.js'
 import { renderPublicLayout } from './layout.js'
 import { posterBlock, stateBadge } from './public-events.js'
 import {
-  el, $, param, isUuid, formatDate, formatTimeRange, formatDateTime, notice, notConfiguredNotice,
+  el, $, param, isUuid, formatDate, formatTime, formatTimeRange, formatDateTime, isMultiDay, notice,
+  notConfiguredNotice,
 } from './ui.js'
 
 const STATE_MESSAGES = {
@@ -44,8 +45,15 @@ export async function initEventDetails() {
 
   const open = ev.registration_state === 'open'
   const facts = [
-    ['Date', formatDate(ev.event_date)],
-    ['Time', formatTimeRange(ev.start_time, ev.end_time)],
+    ...(isMultiDay(ev)
+      ? [
+          ['Starts', `${formatDate(ev.event_date)}, ${formatTime(ev.start_time)}`],
+          ['Ends', `${formatDate(ev.end_date)}${ev.end_time ? ', ' + formatTime(ev.end_time) : ''}`],
+        ]
+      : [
+          ['Date', formatDate(ev.event_date)],
+          ['Time', formatTimeRange(ev.start_time, ev.end_time)],
+        ]),
     ['Venue', ev.venue],
     ev.registration_closes_at ? ['Register by', formatDateTime(ev.registration_closes_at)] : null,
     ['Capacity', `${ev.capacity} participants`],

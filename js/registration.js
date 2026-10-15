@@ -3,6 +3,7 @@ import { supabase, isConfigured } from './supabase-client.js'
 import { renderPublicLayout } from './layout.js'
 import {
   el, $, param, isUuid, formatDate, formatTimeRange, notice, notConfiguredNotice, validateRegistration,
+  formatSchedule,
 } from './ui.js'
 
 const ERROR_FIELDS = {
@@ -47,7 +48,7 @@ export async function initRegistration() {
 
   $('#event-summary').replaceChildren(
     el('h2', {}, ev.name),
-    el('p', { class: 'muted' }, `${formatDate(ev.event_date)} · ${formatTimeRange(ev.start_time, ev.end_time)} · ${ev.venue}`)
+    el('p', { class: 'muted' }, `${formatSchedule(ev)} · ${ev.venue}`)
   )
 
   if (ev.registration_state !== 'open') {

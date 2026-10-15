@@ -29,6 +29,7 @@ create table if not exists public.events (
   venue text not null check (char_length(btrim(venue)) between 2 and 200),
   event_date date not null,
   start_time time not null,
+  end_date date,            -- null = the event ends on event_date (set it for overnight events)
   end_time time,
   capacity integer not null check (capacity > 0 and capacity <= 100000),
   show_remaining boolean not null default true,
@@ -39,7 +40,7 @@ create table if not exists public.events (
   created_by uuid references auth.users (id) on delete set null default auth.uid(),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint events_end_after_start check (end_time is null or end_time > start_time),
+  constraint events_end_date_valid check (end_date is null or end_date >= event_date),
   constraint events_window_order check (
     registration_opens_at is null
     or registration_closes_at is null
@@ -48,6 +49,20 @@ create table if not exists public.events (
 );
 
 create index if not exists events_status_date_idx on public.events (status, event_date);
+
+-- Upgrade for databases created before end_date existed: an event may now end on a
+-- later day (a night vigil that finishes at 5 am). The end moment must be after the start.
+alter table public.events add column if not exists end_date date;
+alter table public.events drop constraint if exists events_end_after_start;
+alter table public.events drop constraint if exists events_end_date_valid;
+alter table public.events drop constraint if exists events_end_after_start_at;
+alter table public.events add constraint events_end_date_valid
+  check (end_date is null or end_date >= event_date);
+alter table public.events add constraint events_end_after_start_at
+  check (
+    (coalesce(end_date, event_date) + coalesce(end_time, time '23:59:59'))
+      > (event_date + start_time)
+  );
 
 -- ---------------------------------------------------------------------------
 -- registrations
