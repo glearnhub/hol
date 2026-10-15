@@ -4,8 +4,7 @@ import QRCode from 'https://cdn.jsdelivr.net/npm/qrcode@1.5.4/+esm'
 import { supabase, isConfigured } from './supabase-client.js'
 import { renderPublicLayout } from './layout.js'
 import {
-  el, $, param, formatDate, formatTimeRange, notice, notConfiguredNotice, toast,
-  formatSchedule,
+  el, $, param, notice, notConfiguredNotice, formatSchedule,
 } from './ui.js'
 
 function readToken(reference) {
@@ -82,17 +81,16 @@ export async function initConfirmation() {
       cancelled ? null : el('div', {}, el('div', { class: 'qr-box' }, canvas)),
       cancelled
         ? null
-        : el('p', { class: 'muted' }, 'Show this QR code at the entrance to check in. A printed copy works too.'),
-      el(
-        'div',
-        { class: 'card-actions no-print', style: 'justify-content:center' },
-        el('button', { class: 'btn btn-primary', type: 'button', onclick: () => window.print() }, 'Print / save as PDF'),
-        cancelled
-          ? null
-          : el(
+        : el('p', { class: 'muted' }, 'Show this QR code at the entrance to check in. Download it or take a screenshot so you have it on your phone.'),
+      cancelled
+        ? null
+        : el(
+            'div',
+            { class: 'card-actions no-print', style: 'justify-content:center' },
+            el(
               'button',
               {
-                class: 'btn btn-outline',
+                class: 'btn btn-primary',
                 type: 'button',
                 onclick: () => {
                   const a = el('a', { href: canvas.toDataURL('image/png'), download: `${reference}-qr.png` })
@@ -102,28 +100,12 @@ export async function initConfirmation() {
                 },
               },
               'Download QR code'
-            ),
-        el(
-          'button',
-          {
-            class: 'btn btn-outline',
-            type: 'button',
-            onclick: async () => {
-              try {
-                await navigator.clipboard.writeText(window.location.href)
-                toast('Link copied')
-              } catch {
-                toast('Copy this page address from your browser', 'error')
-              }
-            },
-          },
-          'Copy my link'
-        )
-      ),
+            )
+          ),
       el(
         'p',
         { class: 'muted no-print', style: 'margin-top:1rem;font-size:.85rem' },
-        'Keep this page private: anyone with this link can use your QR code. Bookmark it or save the link so you can find it again.'
+        'Keep your QR code private: anyone who has it can use your place.'
       )
     )
   )
