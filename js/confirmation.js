@@ -175,9 +175,9 @@ export async function initConfirmation() {
         : el(
             'p',
             { class: 'muted' },
-            'Show this QR code at the entrance to check in. Tap “Save ticket as image” below, or take a ',
-            el('strong', { class: 'highlight-word' }, 'SCREENSHOT'),
-            ' of this page, so it is on your phone even without internet.'
+            'Show this QR code at the entrance to check in. Tap “Save ticket as image” below, or ',
+            el('strong', { class: 'highlight-word' }, 'TAKE A SCREENSHOT OF THIS PAGE'),
+            ', so it is on your phone even without internet.'
           ),
       cancelled
         ? null
