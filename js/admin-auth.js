@@ -15,7 +15,7 @@ const NAV = [
 
 export async function signOut() {
   await supabase.auth.signOut()
-  window.location.href = 'admin-login.html'
+  window.location.href = 'admin.html'
 }
 
 async function isAdminUser(userId) {
@@ -71,13 +71,13 @@ export async function requireAdmin(active) {
   const { data } = await supabase.auth.getSession()
   const session = data.session
   if (!session) {
-    window.location.replace('admin-login.html')
+    window.location.replace('admin.html')
     return null
   }
 
   if (!(await isAdminUser(session.user.id))) {
     await supabase.auth.signOut()
-    window.location.replace('admin-login.html?denied=1')
+    window.location.replace('admin.html?denied=1')
     return null
   }
 
@@ -86,7 +86,7 @@ export async function requireAdmin(active) {
 
   // If the session ends while the page is open, send the user back to log in.
   supabase.auth.onAuthStateChange((event) => {
-    if (event === 'SIGNED_OUT') window.location.replace('admin-login.html')
+    if (event === 'SIGNED_OUT') window.location.replace('admin.html')
   })
 
   return session

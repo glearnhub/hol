@@ -171,7 +171,7 @@ record.
 
 ```
 index.html  events.html  event-details.html  register.html  confirmation.html
-admin-login.html  admin-dashboard.html  manage-events.html
+admin.html  admin-dashboard.html  manage-events.html
 event-registrations.html  reports.html  check-in.html
 css/    styles.css  admin.css  check-in.css
 js/     config.js  supabase-client.js  ui.js  layout.js  posters.js
