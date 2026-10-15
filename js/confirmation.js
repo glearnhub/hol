@@ -19,6 +19,97 @@ function readToken(reference) {
   }
 }
 
+// Draws a ticket picture (logo, event, reference and QR code) on a canvas, so one tap
+// saves everything the participant needs, like a screenshot of this page would.
+function wrapLines(ctx, text, maxWidth) {
+  const lines = []
+  let line = ''
+  for (const word of String(text).split(/\s+/)) {
+    const test = line ? `${line} ${word}` : word
+    if (line && ctx.measureText(test).width > maxWidth) {
+      lines.push(line)
+      line = word
+    } else line = test
+  }
+  if (line) lines.push(line)
+  return lines
+}
+
+function loadImage(src) {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => resolve(null)
+    img.src = src
+  })
+}
+
+async function buildTicket({ qrCanvas, eventName, when, venue, person, reference }) {
+  const W = 900
+  const pad = 60
+  const font = (w, size) => `${w} ${size}px Poppins, "Segoe UI", Arial, sans-serif`
+  const measure = document.createElement('canvas').getContext('2d')
+  measure.font = font(700, 44)
+  const nameLines = wrapLines(measure, eventName, W - pad * 2)
+  measure.font = font(500, 30)
+  const whenLines = wrapLines(measure, when, W - pad * 2)
+
+  const logo = await loadImage('img/logo.png')
+  const logoH = logo ? 300 : 0
+  const qr = 480
+  const H = 90 + logoH + 40 + nameLines.length * 56 + whenLines.length * 42 + 52 + 40 + 90 + qr + 190
+
+  const c = document.createElement('canvas')
+  c.width = W
+  c.height = H
+  const ctx = c.getContext('2d')
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, W, H)
+  ctx.fillStyle = '#600086'
+  ctx.fillRect(0, 0, W, 24)
+  ctx.fillRect(0, H - 24, W, 24)
+  ctx.textAlign = 'center'
+
+  let y = 70
+  if (logo) {
+    const w = (logo.width * logoH) / logo.height
+    ctx.drawImage(logo, (W - w) / 2, y, w, logoH)
+    y += logoH + 40
+  }
+  ctx.fillStyle = '#600086'
+  ctx.font = font(700, 44)
+  for (const l of nameLines) { y += 52; ctx.fillText(l, W / 2, y); y += 4 }
+  ctx.fillStyle = '#333333'
+  ctx.font = font(500, 30)
+  y += 14
+  for (const l of whenLines) { y += 42; ctx.fillText(l, W / 2, y) }
+  ctx.fillStyle = '#555555'
+  ctx.font = font(400, 28)
+  y += 52
+  ctx.fillText(venue, W / 2, y)
+  y += 40
+  ctx.fillStyle = '#333333'
+  ctx.font = font(600, 30)
+  ctx.fillText(person, W / 2, y + 40)
+  y += 90
+
+  // The QR code must stay crisp, so it is scaled without smoothing.
+  ctx.imageSmoothingEnabled = false
+  ctx.fillStyle = '#ffffff'
+  ctx.strokeStyle = '#d9c2e6'
+  ctx.lineWidth = 3
+  ctx.strokeRect((W - qr) / 2 - 18, y - 18, qr + 36, qr + 36)
+  ctx.drawImage(qrCanvas, (W - qr) / 2, y, qr, qr)
+  y += qr + 80
+  ctx.fillStyle = '#600086'
+  ctx.font = '700 40px "Courier New", monospace'
+  ctx.fillText(reference, W / 2, y)
+  ctx.fillStyle = '#777777'
+  ctx.font = font(400, 24)
+  ctx.fillText('Show this QR code at the entrance to check in.', W / 2, y + 48)
+  return c
+}
+
 export async function initConfirmation() {
   renderPublicLayout('events')
   const host = $('#confirmation')
@@ -81,7 +172,7 @@ export async function initConfirmation() {
       cancelled ? null : el('div', {}, el('div', { class: 'qr-box' }, canvas)),
       cancelled
         ? null
-        : el('p', { class: 'muted' }, 'Show this QR code at the entrance to check in. Download it or take a screenshot so you have it on your phone.'),
+        : el('p', { class: 'muted' }, 'Show this QR code at the entrance to check in. Tap “Save ticket as image” below, or take a screenshot of this page, so it is on your phone even without internet.'),
       cancelled
         ? null
         : el(
@@ -92,14 +183,28 @@ export async function initConfirmation() {
               {
                 class: 'btn btn-primary',
                 type: 'button',
-                onclick: () => {
-                  const a = el('a', { href: canvas.toDataURL('image/png'), download: `${reference}-qr.png` })
-                  document.body.append(a)
-                  a.click()
-                  a.remove()
+                onclick: async (e) => {
+                  const btn = e.currentTarget
+                  btn.disabled = true
+                  try {
+                    const ticket = await buildTicket({
+                      qrCanvas: canvas,
+                      eventName: ev.name,
+                      when: formatSchedule(ev),
+                      venue: ev.venue,
+                      person: data.full_name,
+                      reference,
+                    })
+                    const a = el('a', { href: ticket.toDataURL('image/png'), download: `${reference}-ticket.png` })
+                    document.body.append(a)
+                    a.click()
+                    a.remove()
+                  } finally {
+                    btn.disabled = false
+                  }
                 },
               },
-              'Download QR code'
+              'Save ticket as image'
             )
           ),
       el(
