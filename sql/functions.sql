@@ -257,14 +257,16 @@ begin
   end if;
 
   v_name := btrim(regexp_replace(coalesce(p_full_name, ''), '\s+', ' ', 'g'));
-  v_email := lower(btrim(coalesce(p_email, '')));
+  -- The email address is optional: blank means "none given" and is stored as null.
+  v_email := nullif(lower(btrim(coalesce(p_email, ''))), '');
   v_phone := private.normalize_phone(p_phone);
   v_church := btrim(regexp_replace(coalesce(p_church_name, ''), '\s+', ' ', 'g'));
 
   if char_length(v_name) < 2 or char_length(v_name) > 100 then
     return private.fail('invalid_name', 'Please enter your full name.');
   end if;
-  if char_length(v_email) > 254 or v_email !~* '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' then
+  if v_email is not null
+     and (char_length(v_email) > 254 or v_email !~* '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$') then
     return private.fail('invalid_email', 'Please enter a valid email address.');
   end if;
   if v_phone !~ '^\+[0-9]{9,15}$' then
@@ -296,7 +298,7 @@ begin
   -- One active registration per person per event: the same e-mail address OR the same
   -- phone number (in any spelling, see normalize_phone) cannot register again. The event
   -- row is locked above, so two simultaneous attempts cannot both get through.
-  if exists (
+  if v_email is not null and exists (
     select 1 from public.registrations
     where event_id = ev.id and status = 'registered' and lower(email) = v_email
   ) then
@@ -330,7 +332,7 @@ begin
       returning id into v_id;
       exit;
     exception when unique_violation then
-      if exists (
+      if v_email is not null and exists (
         select 1 from public.registrations
         where event_id = ev.id and lower(email) = v_email and status = 'registered'
       ) then

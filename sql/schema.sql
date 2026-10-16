@@ -74,7 +74,7 @@ create table if not exists public.registrations (
   id uuid primary key default gen_random_uuid(),
   event_id uuid not null references public.events (id) on delete restrict,
   full_name text not null check (char_length(btrim(full_name)) between 2 and 100),
-  email text not null check (
+  email text check (   -- optional: null when the participant gives no email address
     char_length(email) <= 254 and email ~* '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$'
   ),
   phone text not null check (phone ~ '^\+[0-9]{9,15}$'),
@@ -88,6 +88,8 @@ create table if not exists public.registrations (
 
 -- Upgrade for databases created before consent was recorded.
 alter table public.registrations add column if not exists consented_at timestamptz;
+-- Upgrade: the email address became optional (phone number is the required contact).
+alter table public.registrations alter column email drop not null;
 
 create unique index if not exists registrations_event_email_active_uq
   on public.registrations (event_id, lower(email))

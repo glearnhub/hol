@@ -104,7 +104,7 @@ export async function initRegistration() {
     const { data, error: rpcError } = await supabase.rpc('register_participant', {
       p_event_id: ev.id,
       p_full_name: values.fullName,
-      p_email: values.email,
+      p_email: values.email.trim(),
       p_phone: values.phone,
       p_church_name: values.church,
       p_consent: form.consent.checked,

@@ -114,7 +114,8 @@ export function validateRegistration({ fullName, email, phone, church }) {
   const errors = {}
   const name = fullName.trim().replace(/\s+/g, ' ')
   if (name.length < 2 || name.length > 100) errors.fullName = 'Please enter your full name.'
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim()) || email.trim().length > 254) {
+  // The email address is optional; when one is given it must look valid.
+  if (email.trim() && (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim()) || email.trim().length > 254)) {
     errors.email = 'Please enter a valid email address.'
   }
   if (!/^\+[0-9]{9,15}$/.test(normalizePhone(phone))) {

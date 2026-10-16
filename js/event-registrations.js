@@ -78,7 +78,7 @@ function renderTable(rows) {
             'tr',
             {},
             el('td', {}, el('strong', {}, r.full_name), el('div', { class: 'muted' }, r.registration_reference)),
-            el('td', {}, r.email),
+            el('td', {}, r.email || '—'),
             el('td', {}, r.phone),
             el('td', {}, r.church_name),
             el('td', {}, formatDateTime(r.created_at)),
@@ -135,7 +135,7 @@ function renderPager() {
 
 export const PARTICIPANT_COLUMNS = (isEnded) => [
   { header: 'Full name', value: (r) => r.full_name },
-  { header: 'Email', value: (r) => r.email },
+  { header: 'Email', value: (r) => r.email || '' },
   { header: 'Phone', value: (r) => r.phone },
   { header: 'Church', value: (r) => r.church_name },
   { header: 'Reference', value: (r) => r.registration_reference },
@@ -204,8 +204,11 @@ async function loadThankYou() {
       }
     }
     summary.textContent = attendeeEmails.length
-      ? `${attendeeEmails.length} attendee${attendeeEmails.length === 1 ? '' : 's'} checked in. Their email addresses are listed below.`
-      : 'Nobody has been checked in for this event yet, so there are no addresses to copy.'
+      ? `${attendeeEmails.length} email address${attendeeEmails.length === 1 ? '' : 'es'} from ${rows.length} attendee${rows.length === 1 ? '' : 's'} checked in` +
+        (rows.length > attendeeEmails.length ? ' (the others did not give an email address).' : '.')
+      : rows.length
+        ? 'The attendees who checked in did not give email addresses.'
+        : 'Nobody has been checked in for this event yet, so there are no addresses to copy.'
     paintEmailList()
     $('#copy-emails').disabled = $('#open-mail').disabled = attendeeEmails.length === 0
   } catch (e) {

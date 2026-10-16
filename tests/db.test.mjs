@@ -217,6 +217,17 @@ check('registration without consent rejected', noConsent.error === 'consent_requ
 check('consent time is recorded',
   (await db.query(`select consented_at is not null as ok from public.registrations where registration_reference = $1`, [r1.registration_reference])).rows[0].ok)
 
+// The email address is optional.
+const evNoEmail = await makeEvent('No Email Event', 10)
+const noEmail1 = await reg(evNoEmail, 60, { email: '', phone: '0713 000 601' }, { ip: '10.1.2.1' })
+check('registration without an email address is accepted', noEmail1.ok === true, JSON.stringify(noEmail1))
+check('a missing email is stored as null',
+  (await db.query(`select email is null as n from public.registrations where registration_reference = $1`, [noEmail1.registration_reference])).rows[0].n)
+const noEmail2 = await reg(evNoEmail, 61, { email: '   ', phone: '0713 000 602' }, { ip: '10.1.2.2' })
+check('two registrations without email do not clash', noEmail2.ok === true, JSON.stringify(noEmail2))
+const noEmailDupPhone = await reg(evNoEmail, 62, { email: '', phone: '0713000601' }, { ip: '10.1.2.3' })
+check('same phone is still rejected when no email is given', noEmailDupPhone.error === 'phone_already_registered', JSON.stringify(noEmailDupPhone))
+
 check('invalid e-mail rejected', (await reg(evA, 9, { email: 'not-an-email' }, { ip: '10.1.0.3' })).error === 'invalid_email')
 check('invalid phone rejected', (await reg(evA, 9, { phone: '12' }, { ip: '10.1.0.3' })).error === 'invalid_phone')
 check('missing name rejected', (await reg(evA, 9, { name: ' ' }, { ip: '10.1.0.3' })).error === 'invalid_name')

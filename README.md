@@ -343,3 +343,11 @@ move the site to a custom domain, replace that address in the `og:` and `twitter
 tags of `index.html`, `events.html`, `event-details.html`, `register.html`,
 `confirmation.html` and `check-in.html`. Chat apps cache previews, so a link shared
 before this change may keep its old preview for a while.
+
+## Email is optional
+
+The email field on the registration form is optional; the phone number is the required contact.
+Duplicate checks still use the phone number (and the email, when one is given). The Thank-you
+email panel lists only the attendees who gave an email address and says how many did not.
+To apply this to an existing database, re-run `sql/schema.sql` then `sql/functions.sql` and
+`sql/policies.sql`.
