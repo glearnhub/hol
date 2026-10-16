@@ -12,6 +12,7 @@ const ERROR_FIELDS = {
   invalid_phone: 'phone',
   invalid_church: 'church',
   already_registered: 'email',
+  consent_required: 'consent',
   phone_already_registered: 'phone',
 }
 
@@ -67,17 +68,33 @@ export async function initRegistration() {
   const form = $('#register-form')
   const submit = $('#submit-btn')
 
+  // "Other" reveals a box for the name of the participant's church.
+  form.church.addEventListener('change', () => {
+    const other = form.church.value === '__other'
+    $('#church-other-field').classList.toggle('hidden', !other)
+    if (other) form.churchOther.focus()
+    else form.churchOther.value = ''
+  })
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault()
     status.replaceChildren()
 
+    const other = form.church.value === '__other'
     const values = {
       fullName: form.fullName.value,
       email: form.email.value,
       phone: form.phone.value,
-      church: form.church.value,
+      church: other ? form.churchOther.value : form.church.value,
     }
     const errors = validateRegistration(values)
+    // The church is a drop-down, so it has its own messages.
+    delete errors.church
+    if (!form.church.value) errors.church = 'Please choose your church.'
+    else if (other && (values.church.trim().length < 2 || values.church.trim().length > 150)) {
+      errors.churchOther = 'Please enter the name of your church.'
+    }
+    if (!form.consent.checked) errors.consent = 'Please tick the box to give your consent before registering.'
     showFieldErrors(form, errors)
     if (Object.keys(errors).length) return
 
@@ -90,6 +107,7 @@ export async function initRegistration() {
       p_email: values.email,
       p_phone: values.phone,
       p_church_name: values.church,
+      p_consent: form.consent.checked,
     })
 
     if (rpcError || !data) {

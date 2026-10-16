@@ -316,6 +316,16 @@ Configuration**.
 * **Camera scanning** needs HTTPS (or localhost) and the user's permission; the
   search and manual-code methods work without a camera.
 
+## Registration form: consent and church
+
+* The form needs a ticked **consent** box before it can be submitted. The database also
+  refuses a registration without consent and stores when it was given (`consented_at`).
+* **Church** is a drop-down. **Chrisco Upperroom Fellowship** is listed; choosing **Other**
+  opens a box for the participant to type their church. To add more churches to the list,
+  add an `<option>` to the church `<select>` in `register.html`.
+* If you already ran the SQL before this change, re-run `sql/schema.sql`, `sql/functions.sql`
+  and `sql/policies.sql` in that order (the registration function gained a consent argument).
+
 ## Thank-you emails to attendees
 
 On an event's **Registrations** page, **Thank-you email** lists the email addresses of

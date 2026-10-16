@@ -851,3 +851,23 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .highlight-word { animation: none; }
 }
+
+.consent-label {
+  display: flex !important;
+  align-items: flex-start;
+  gap: 0.75rem;
+  font-weight: 400 !important;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.consent-label input[type='checkbox'] {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  margin-top: 0.1rem;
+  accent-color: var(--primary);
+  padding: 0;
+}
+.field.invalid .consent-label {
+  color: var(--error);
+}

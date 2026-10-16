@@ -152,6 +152,7 @@ const reg = (eventId, n, over = {}, opts) =>
         p_email: over.email ?? `grace${n}@example.com`,
         p_phone: over.phone ?? `0712 000 ${String(100 + n)}`,
         p_church_name: over.church ?? 'Redeemed Gospel Church',
+        p_consent: over.consent ?? true,
       }),
     opts
   )
@@ -210,6 +211,11 @@ const afterDupes = await db.query(`select count(*)::int as n from public.registr
 check('rejected duplicates created no registration', afterDupes.rows[0].n === 1, String(afterDupes.rows[0].n))
 const phoneNorm = (await db.query(`select private.normalize_phone('0702499324') a, private.normalize_phone('+254702499324') b, private.normalize_phone('254 702 499 324') c, private.normalize_phone('+2540702499324') d`)).rows[0]
 check('0702499324 and +254702499324 are the same number', phoneNorm.a === '+254702499324' && phoneNorm.a === phoneNorm.b && phoneNorm.b === phoneNorm.c && phoneNorm.c === phoneNorm.d, JSON.stringify(phoneNorm))
+
+const noConsent = await reg(evA, 9, { consent: false }, { ip: '10.1.0.3' })
+check('registration without consent rejected', noConsent.error === 'consent_required', JSON.stringify(noConsent))
+check('consent time is recorded',
+  (await db.query(`select consented_at is not null as ok from public.registrations where registration_reference = $1`, [r1.registration_reference])).rows[0].ok)
 
 check('invalid e-mail rejected', (await reg(evA, 9, { email: 'not-an-email' }, { ip: '10.1.0.3' })).error === 'invalid_email')
 check('invalid phone rejected', (await reg(evA, 9, { phone: '12' }, { ip: '10.1.0.3' })).error === 'invalid_phone')

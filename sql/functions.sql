@@ -223,12 +223,16 @@ where e.status = 'published';
 -- The event row is locked FOR UPDATE, so concurrent registrations for one event
 -- are processed one at a time and capacity can never be exceeded.
 -- ---------------------------------------------------------------------------
+-- The signature gained p_consent, so the old five-argument version must go.
+drop function if exists public.register_participant(uuid, text, text, text, text);
+
 create or replace function public.register_participant(
   p_event_id uuid,
   p_full_name text,
   p_email text,
   p_phone text,
-  p_church_name text
+  p_church_name text,
+  p_consent boolean default false
 )
 returns jsonb
 language plpgsql
@@ -268,6 +272,10 @@ begin
   end if;
   if char_length(v_church) < 2 or char_length(v_church) > 150 then
     return private.fail('invalid_church', 'Please enter your church name.');
+  end if;
+  -- Registration needs the participant's consent to the use of their details.
+  if p_consent is not true then
+    return private.fail('consent_required', 'Please tick the consent box to register.');
   end if;
 
   select * into ev from public.events where id = p_event_id for update;
@@ -316,9 +324,9 @@ begin
 
     begin
       insert into public.registrations
-        (event_id, full_name, email, phone, church_name, registration_reference, qr_token_hash)
+        (event_id, full_name, email, phone, church_name, registration_reference, qr_token_hash, consented_at)
       values
-        (ev.id, v_name, v_email, v_phone, v_church, v_ref, private.hash_token(v_token))
+        (ev.id, v_name, v_email, v_phone, v_church, v_ref, private.hash_token(v_token), now())
       returning id into v_id;
       exit;
     exception when unique_violation then

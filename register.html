@@ -60,8 +60,28 @@
                 <div class="error" role="alert"></div>
               </div>
               <div class="field" data-field="church">
-                <label for="church">Church name</label>
-                <input id="church" name="church" type="text" maxlength="150" required />
+                <label for="church">Church</label>
+                <select id="church" name="church" required>
+                  <option value="">Select your church</option>
+                  <option value="Chrisco Upperroom Fellowship">Chrisco Upperroom Fellowship</option>
+                  <option value="__other">Other</option>
+                </select>
+                <div class="error" role="alert"></div>
+              </div>
+              <div class="field hidden" data-field="churchOther" id="church-other-field">
+                <label for="churchOther">Name of your church</label>
+                <input id="churchOther" name="churchOther" type="text" maxlength="150" autocomplete="organization" />
+                <div class="error" role="alert"></div>
+              </div>
+              <div class="field consent" data-field="consent">
+                <label class="consent-label" for="consent">
+                  <input id="consent" name="consent" type="checkbox" required />
+                  <span>
+                    I consent to Handmaidens of the Lord collecting and using my name, email address,
+                    phone number and church to manage my registration and attendance at this event,
+                    and to contact me about it, including sending a thank-you message after the event.
+                  </span>
+                </label>
                 <div class="error" role="alert"></div>
               </div>
               <button id="submit-btn" class="btn btn-primary" type="submit">Complete registration</button>

@@ -117,7 +117,7 @@ grant select on public.public_events to anon, authenticated;
 grant execute on function public.is_admin() to authenticated;
 
 -- Anonymous workflows: registration, re-opening a confirmation, volunteer check-in.
-grant execute on function public.register_participant(uuid, text, text, text, text) to anon, authenticated;
+grant execute on function public.register_participant(uuid, text, text, text, text, boolean) to anon, authenticated;
 grant execute on function public.get_registration_confirmation(text, text) to anon, authenticated;
 grant execute on function public.volunteer_event(text) to anon, authenticated;
 grant execute on function public.volunteer_search(text, text) to anon, authenticated;

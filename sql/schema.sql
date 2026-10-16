@@ -82,8 +82,12 @@ create table if not exists public.registrations (
   registration_reference text not null unique,
   qr_token_hash text not null unique,
   status text not null default 'registered' check (status in ('registered', 'cancelled')),
+  consented_at timestamptz,   -- when the participant ticked the data-use consent box
   created_at timestamptz not null default now()
 );
+
+-- Upgrade for databases created before consent was recorded.
+alter table public.registrations add column if not exists consented_at timestamptz;
 
 create unique index if not exists registrations_event_email_active_uq
   on public.registrations (event_id, lower(email))
