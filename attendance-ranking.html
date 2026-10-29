@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="robots" content="noindex" />
+    <title>Annual attendance · Handmaidens of the Lord</title>
+    <link rel="icon" type="image/png" sizes="64x64" href="img/favicon-64.png" />
+    <link rel="apple-touch-icon" href="img/apple-touch-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/styles.css" />
+    <link rel="stylesheet" href="css/admin.css" />
+  </head>
+  <body class="admin">
+    <div class="admin-layout">
+      <aside id="admin-sidebar" aria-label="Administration menu"></aside>
+      <div class="admin-content">
+        <header id="admin-topbar"></header>
+        <main id="page" class="hidden">
+          <div class="page-title no-print">
+            <div>
+              <h1>Annual attendance</h1>
+              <div class="muted">How many meetings each person attended in a calendar year, ranked from most to fewest.</div>
+            </div>
+            <div class="row-actions">
+              <button id="export" class="btn btn-primary" type="button">Export CSV</button>
+              <button id="print" class="btn btn-outline" type="button">Print / save as PDF</button>
+            </div>
+          </div>
+          <div id="status" aria-live="polite"></div>
+
+          <div class="toolbar no-print">
+            <div class="field">
+              <label for="f-year">Year</label>
+              <select id="f-year"></select>
+            </div>
+            <div class="field">
+              <label for="f-scope">Show</label>
+              <select id="f-scope">
+                <option value="members">Members</option>
+                <option value="visitors">Visitors</option>
+                <option value="all">Members and visitors</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="f-category">Event type</label>
+              <select id="f-category"><option value="">All types</option></select>
+            </div>
+            <label class="check-inline"><input id="f-zero" type="checkbox" checked /> Include members with no attendance</label>
+            <div class="field grow">
+              <label for="f-search">Search the ranking</label>
+              <input id="f-search" type="search" placeholder="Name or phone number" autocomplete="off" />
+            </div>
+          </div>
+
+          <section id="report">
+            <div id="stats" class="stats"></div>
+
+            <section class="panel">
+              <h2>Attendance by month</h2>
+              <div class="chart-box"><canvas id="chart" aria-label="Chart of attendance by month"></canvas></div>
+            </section>
+
+            <section class="panel">
+              <h2 id="ranking-title">Ranking</h2>
+              <div id="ranking" class="table-wrap"></div>
+              <p class="muted small-print">
+                A meeting counts when it is published or completed, has attendance recording switched on and its date is in
+                the selected year. Cancelled events and drafts never count. Each person is counted once per meeting, even if
+                checked in more than once, and registering without being checked in counts for nothing. People with the same
+                number of meetings share a rank, and the next rank skips ahead (1, 2, 2, 4).
+              </p>
+            </section>
+
+            <div class="two-col">
+              <section class="panel">
+                <h2>By event type</h2>
+                <div id="categories" class="table-wrap"></div>
+              </section>
+              <section class="panel">
+                <h2>Compared with <span id="prev-year"></span></h2>
+                <div id="compare"></div>
+              </section>
+            </div>
+          </section>
+
+          <section class="panel no-print">
+            <h2>Members not seen recently</h2>
+            <div class="toolbar">
+              <div class="field">
+                <label for="f-days">Not at any meeting for</label>
+                <select id="f-days">
+                  <option value="30">30 days</option>
+                  <option value="60" selected>60 days</option>
+                  <option value="90">90 days</option>
+                  <option value="180">180 days</option>
+                </select>
+              </div>
+            </div>
+            <div id="lapsed" class="table-wrap"></div>
+          </section>
+        </main>
+      </div>
+    </div>
+    <script type="module">
+      import { initRanking } from './js/ranking.js'
+      initRanking()
+    </script>
+  </body>
+</html>

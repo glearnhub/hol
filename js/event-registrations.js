@@ -1,6 +1,6 @@
 // Participant list for one event: search, filter, sort, paginate, export, mark present.
 import { requireAdmin } from './admin-auth.js'
-import { callRpc, attendanceBadge, attendanceLabel, errorText } from './admin-common.js'
+import { callRpc, attendanceBadge, attendanceLabel, errorText, kindBadge } from './admin-common.js'
 import {
   el, $, param, isUuid, formatDate, formatTimeRange, formatDateTime, notice, toast, toCsv, downloadFile,
   debounce, slug,
@@ -11,6 +11,7 @@ const PAGE_SIZE = 20
 let eventId = null
 let ended = false
 let report = null
+let isAdmin = false
 const state = { page: 0, search: '', filter: 'all', sort: 'created_desc', total: 0 }
 
 function statCard(value, label) {
@@ -28,9 +29,11 @@ async function loadReport() {
 
   $('#stats').replaceChildren(
     statCard(`${report.registrations} / ${report.capacity}`, 'Registered'),
-    statCard(report.attendees, 'Present'),
+    statCard(report.unique_attendees ?? report.attendees, 'Present (everyone)'),
+    statCard(report.members_attended ?? 0, 'Members present'),
+    statCard(report.visitors_attended ?? 0, 'Visitors present'),
     statCard(ended ? report.absentees : report.not_checked_in, ended ? 'Absent' : 'Not yet checked in'),
-    statCard(`${report.attendance_percentage}%`, 'Attendance'),
+    statCard(`${report.attendance_percentage}%`, 'Registered who attended'),
     statCard(report.remaining_capacity, 'Spaces left')
   )
 }
@@ -68,7 +71,7 @@ function renderTable(rows) {
       el(
         'thead',
         {},
-        el('tr', {}, ...['Name', 'Email', 'Phone', 'Church', 'Registered', 'Attendance', 'Checked in', ''].map((h) => el('th', {}, h)))
+        el('tr', {}, ...['Name', 'Type', 'Email', 'Phone', 'Church', 'Registered', 'Attendance', 'Checked in', ''].map((h) => el('th', {}, h)))
       ),
       el(
         'tbody',
@@ -78,6 +81,7 @@ function renderTable(rows) {
             'tr',
             {},
             el('td', {}, el('strong', {}, r.full_name), el('div', { class: 'muted' }, r.registration_reference)),
+            el('td', {}, kindBadge(r.classification || 'visitor')),
             el('td', {}, r.email || '—'),
             el('td', {}, r.phone),
             el('td', {}, r.church_name),
@@ -100,13 +104,19 @@ function rowActions(r) {
     r.checked_in_at
       ? el('button', { class: 'btn btn-outline btn-small', type: 'button', onclick: () => setPresent(r, false) }, 'Undo')
       : el('button', { class: 'btn btn-secondary btn-small', type: 'button', onclick: () => setPresent(r, true) }, 'Mark present'),
-    el('button', { class: 'btn btn-danger btn-small', type: 'button', onclick: () => cancelRegistration(r) }, 'Cancel')
+    isAdmin ? el('button', { class: 'btn btn-danger btn-small', type: 'button', onclick: () => cancelRegistration(r) }, 'Cancel') : null
   )
 }
 
 async function setPresent(r, present) {
   try {
-    await callRpc('admin_set_attendance', { p_registration_id: r.id, p_present: present })
+    let reason = null
+    if (!present) {
+      // Taking someone off the attendance list keeps a copy and the reason.
+      reason = prompt(`Why is ${r.full_name} being removed from the attendance list? (for example "marked by mistake")`)
+      if (reason === null) return
+    }
+    await callRpc('admin_set_attendance', { p_registration_id: r.id, p_present: present, p_reason: reason })
     toast(present ? `${r.full_name} marked present` : 'Attendance cleared')
     await Promise.all([loadReport(), loadPage()])
   } catch (e) {
@@ -135,6 +145,7 @@ function renderPager() {
 
 export const PARTICIPANT_COLUMNS = (isEnded) => [
   { header: 'Full name', value: (r) => r.full_name },
+  { header: 'Type', value: (r) => (r.classification === 'member' ? 'Member' : 'Visitor') },
   { header: 'Email', value: (r) => r.email || '' },
   { header: 'Phone', value: (r) => r.phone },
   { header: 'Church', value: (r) => r.church_name },
@@ -156,6 +167,65 @@ export async function fetchAllRegistrations(id, { search = '', filter = 'all', s
     if (all.length >= data.total || data.rows.length === 0) break
   }
   return all
+}
+
+// ---- Mark anyone present (members who were missed, people who did not register) ----
+async function searchPeople() {
+  const q = $('#mark-search').value.trim()
+  const host = $('#mark-results')
+  if (q.length < 3) {
+    host.replaceChildren()
+    return
+  }
+  try {
+    const data = await callRpc('staff_search_people', { p_event_id: eventId, p_query: q })
+    if (data.results.length === 0) {
+      host.replaceChildren(el('p', { class: 'muted' }, 'Nobody found. Members are added on the Members page; new visitors are registered by ushers or through the registration link.'))
+      return
+    }
+    host.replaceChildren(
+      el(
+        'table',
+        { class: 'data' },
+        el('thead', {}, el('tr', {}, ...['Name', 'Type', 'Phone', 'Registered', 'Attendance', ''].map((h) => el('th', {}, h)))),
+        el(
+          'tbody',
+          {},
+          ...data.results.map((p) =>
+            el(
+              'tr',
+              {},
+              el('td', {}, el('strong', {}, p.full_name), el('div', { class: 'muted' }, p.label)),
+              el('td', {}, kindBadge(p.kind)),
+              el('td', {}, p.phone),
+              el('td', {}, p.registered ? 'Yes' : 'No'),
+              el('td', {}, p.checked_in ? el('span', { class: 'badge badge-success' }, `Present ${formatDateTime(p.checked_in_at)}`) : el('span', { class: 'badge badge-muted' }, 'Not present')),
+              el('td', {}, p.checked_in
+                ? el('button', { class: 'btn btn-outline btn-small', type: 'button', onclick: () => setPersonPresent(p, false) }, 'Remove')
+                : el('button', { class: 'btn btn-secondary btn-small', type: 'button', onclick: () => setPersonPresent(p, true) }, 'Mark present'))
+            )
+          )
+        )
+      )
+    )
+  } catch (e) {
+    notice(host, errorText(e), 'error')
+  }
+}
+
+async function setPersonPresent(p, present) {
+  let reason = null
+  if (!present) {
+    reason = prompt(`Why is ${p.full_name} being removed from the attendance list? (for example "marked by mistake")`)
+    if (reason === null) return
+  }
+  try {
+    await callRpc('admin_set_person_attendance', { p_event_id: eventId, p_person_id: p.person_id, p_present: present, p_reason: reason })
+    toast(present ? `${p.full_name} marked present` : 'Attendance removed (a copy is kept in the history)')
+    await Promise.all([loadReport(), loadPage(), searchPeople()])
+  } catch (e) {
+    toast(errorText(e), 'error')
+  }
 }
 
 async function exportCsv() {
@@ -264,8 +334,13 @@ function initThankYou() {
 }
 
 export async function initEventRegistrations() {
-  const session = await requireAdmin('events')
+  const session = await requireAdmin('events', { roles: ['admin', 'manager'] })
   if (!session) return
+  isAdmin = session.role === 'admin'
+  if (!isAdmin) {
+    $('#thank-you').classList.add('hidden')
+    notice($('#status'), 'You can mark people present and correct mistakes. Phone numbers are partly hidden, and only administrators can cancel registrations.', 'info')
+  }
 
   eventId = param('id')
   if (!isUuid(eventId)) {
@@ -305,7 +380,9 @@ export async function initEventRegistrations() {
     loadPage()
   })
   $('#export').addEventListener('click', exportCsv)
-  initThankYou()
+  $('#mark-search').addEventListener('input', debounce(searchPeople, 350))
+  $('#report-link').href = `reports.html?id=${eventId}`
+  if (isAdmin) initThankYou()
 
   await loadPage()
 }

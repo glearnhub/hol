@@ -44,7 +44,7 @@
       <div id="app" class="hidden">
         <div class="ci-tabs" role="tablist">
           <button id="tab-scan" class="active" role="tab" type="button" aria-selected="true">Scan QR code</button>
-          <button id="tab-search" role="tab" type="button" aria-selected="false">Search</button>
+          <button id="tab-search" role="tab" type="button" aria-selected="false">Search members and visitors</button>
         </div>
 
         <!-- Result of the last action: green, amber or red -->
@@ -77,12 +77,28 @@
 
         <section id="panel-search" class="hidden">
           <div class="ci-card">
-            <label for="search">Search by participant name or phone number</label>
-            <input id="search" type="search" autocomplete="off" placeholder="Search by participant name or phone number" />
-            <p class="muted" style="margin:.5rem 0 0">Type at least 3 characters.</p>
+            <label for="search">Search by name or phone number</label>
+            <input id="search" type="search" autocomplete="off" placeholder="Search by name or phone number" />
+            <p class="muted" style="margin:.5rem 0 0">Type at least 3 characters. Members and visitors are both found here.</p>
           </div>
           <div id="matches"></div>
           <div id="confirm" class="ci-card hidden"></div>
+
+          <div id="walkin-wrap" class="hidden">
+            <button id="walkin-toggle" class="btn btn-outline btn-big" type="button" aria-expanded="false">+ Not in the list? Register a new visitor</button>
+            <form id="walkin-form" class="ci-card hidden" novalidate>
+              <h2>New visitor</h2>
+              <p class="muted" style="margin-top:0">Takes a few seconds. The visitor is registered and marked present together.</p>
+              <label for="w-name">Full name</label>
+              <input id="w-name" type="text" autocomplete="off" maxlength="100" />
+              <label for="w-phone">Phone number</label>
+              <input id="w-phone" type="tel" inputmode="tel" autocomplete="off" placeholder="0712 345 678" />
+              <label for="w-church">Church (optional)</label>
+              <input id="w-church" type="text" autocomplete="off" maxlength="150" />
+              <label class="ci-check"><input id="w-consent" type="checkbox" /> <span>The visitor agrees to their name and phone number being recorded by Handmaidens of the Lord.</span></label>
+              <button class="btn btn-primary btn-big" type="submit">Register and mark present</button>
+            </form>
+          </div>
         </section>
       </div>
     </main>

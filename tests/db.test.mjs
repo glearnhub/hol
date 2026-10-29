@@ -868,6 +868,29 @@ const overview2 = await A('admin_reports_overview', {})
 check('the reports overview carries member and visitor attendance', overview2.events.some((e) => e.members_attended >= 1 && e.unique_attendees >= 1))
 const stats2 = await A('admin_dashboard_stats', {})
 check('dashboard stats include members and visitors', stats2.total_members >= 5 && stats2.total_visitors >= 1)
+// ---- 8.7 Staff look-ups and what managers may see ------------------------------------------------
+const ss = await M('staff_search_people', { p_event_id: evQr, p_query: 'wambui' })
+check('a manager can search people to correct attendance, with masked phone numbers',
+  ss.ok && ss.results.some((r) => r.person_id === m1.id) && !JSON.stringify(ss).includes('702499324'))
+const ssAdmin = await A('staff_search_people', { p_event_id: evQr, p_query: 'wambui' })
+check('an administrator sees the full phone number there', JSON.stringify(ssAdmin).includes('+254702499324'))
+check('staff search needs 3 characters', (await M('staff_search_people', { p_event_id: evQr, p_query: 'ab' })).error === 'query_too_short')
+check('an ordinary user cannot use staff search',
+  await denied(() => as('authenticated', () => rpc('staff_search_people', { p_event_id: evQr, p_query: 'wambui' }), { uid: '99999999-9999-9999-9999-999999999999' })))
+check('the public cannot use staff search', await denied(() => as('anon', () => rpc('staff_search_people', { p_event_id: evQr, p_query: 'wambui' }))))
+const mgrList = await M('admin_list_registrations', { p_event_id: evPub })
+check('a manager sees masked phone numbers and no email addresses in the participant list',
+  mgrList.ok && mgrList.rows.length > 0 && mgrList.rows.every((r) => r.phone.startsWith('•') && !r.email))
+const admList = await A('admin_list_registrations', { p_event_id: evPub })
+check('an administrator sees full phone numbers in the participant list', admList.rows.every((r) => r.phone.startsWith('+254')))
+const evPersonal = await newEvent('Personal Data Event')
+check('registrations cannot be read directly through the API by the public',
+  await denied(() => as('anon', () => db.query('select * from public.registrations'))))
+check('the correction history cannot be read by the public',
+  await denied(() => as('anon', () => db.query('select * from public.attendance_corrections'))))
+check('event links (secret tokens) cannot be read through the API',
+  await denied(() => as('authenticated', () => db.query('select token_plain from public.volunteer_access'), { uid: adminId })))
+
 
 }
 console.log(`\n${passed} passed, ${failed} failed`)

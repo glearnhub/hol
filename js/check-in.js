@@ -16,6 +16,7 @@ let scanner = null
 let scanning = false
 let busy = false
 let lastCode = { value: '', at: 0 }
+let allowWalkins = false
 
 // ---------------------------------------------------------------------------
 function showResult(kind, title, detail = '') {
@@ -49,7 +50,7 @@ function applyOutcome(data, error, successText) {
     return false
   }
   if (!data.ok) {
-    if (['invalid_access', 'revoked', 'expired', 'event_unavailable'].includes(data.error)) {
+    if (['invalid_access', 'revoked', 'expired', 'event_unavailable', 'attendance_disabled'].includes(data.error)) {
       lockOut(explain(data))
       return false
     }
@@ -57,10 +58,15 @@ function applyOutcome(data, error, successText) {
     return false
   }
   if (data.result === 'already_checked_in') {
-    showResult('duplicate', 'Already checked in', `${data.full_name} checked in at ${formatDateTime(data.checked_in_at)}.`)
+    showResult(
+      'duplicate',
+      'Already marked present',
+      `This person has already been marked present for this event. ${data.full_name} was checked in at ${formatDateTime(data.checked_in_at)}.`
+    )
     return true
   }
-  showResult('success', successText || 'Checked in', `${data.full_name} is now marked present.`)
+  const who = data.kind === 'member' ? 'member' : 'visitor'
+  showResult('success', successText || 'Checked in', `${data.full_name} (${who}) is now marked present.`)
   return true
 }
 
@@ -76,7 +82,10 @@ async function loadEvent(first = false) {
   $('#event-name').textContent = data.event.name
   $('#event-meta').textContent =
     `${formatSchedule(data.event)} · ${data.event.venue}`
-  $('#counts').textContent = `${data.checked_in} of ${data.registered} checked in`
+  allowWalkins = Boolean(data.allow_walkins)
+  $('#walkin-wrap').classList.toggle('hidden', !allowWalkins)
+  $('#counts').textContent =
+    `${data.checked_in} present (${data.members_present} members, ${data.visitors_present} visitors) · ${data.registered} registered`
   if (first) {
     status.replaceChildren()
     $('#app').classList.remove('hidden')
@@ -268,7 +277,11 @@ function renderMatches(rows) {
   const host = $('#matches')
   $('#confirm').classList.add('hidden')
   if (rows.length === 0) {
-    host.replaceChildren(el('div', { class: 'ci-card muted' }, 'No participants found for that search.'))
+    host.replaceChildren(
+      el('div', { class: 'ci-card muted' }, allowWalkins
+        ? 'Nobody found for that search. If they are new, use "Register a new visitor" below.'
+        : 'Nobody found for that search.')
+    )
     return
   }
   host.replaceChildren(
@@ -276,9 +289,14 @@ function renderMatches(rows) {
       el(
         'button',
         { class: 'match', type: 'button', onclick: () => confirmPerson(p) },
-        el('span', {}, el('span', { class: 'who' }, p.full_name), el('div', { class: 'phone' }, p.phone_hint)),
+        el(
+          'span',
+          {},
+          el('span', { class: 'who' }, p.full_name),
+          el('div', { class: 'phone' }, `${p.phone_hint} · ${p.kind === 'member' ? 'Member' : p.registered ? 'Visitor (registered)' : 'Visitor'}`)
+        ),
         p.checked_in
-          ? el('span', { class: 'badge badge-success' }, 'Checked in')
+          ? el('span', { class: 'badge badge-success' }, 'Present')
           : el('span', { class: 'badge badge-muted' }, 'Not yet')
       )
     )
@@ -290,9 +308,9 @@ function confirmPerson(p) {
   box.replaceChildren(
     el('p', { class: 'muted', style: 'margin:0' }, 'Confirm this is the right person:'),
     el('p', { class: 'confirm-name' }, p.full_name),
-    el('p', { class: 'muted' }, `Phone ${p.phone_hint}`),
+    el('p', { class: 'muted' }, `${p.kind === 'member' ? 'Member' : 'Visitor'} · ${p.label} · phone ${p.phone_hint}`),
     p.checked_in
-      ? el('div', { class: 'notice notice-warning' }, `Already checked in at ${formatDateTime(p.checked_in_at)}.`)
+      ? el('div', { class: 'notice notice-warning' }, `This person has already been marked present for this event (at ${formatDateTime(p.checked_in_at)}).`)
       : el(
           'button',
           {
@@ -300,9 +318,9 @@ function confirmPerson(p) {
             type: 'button',
             onclick: async (e) => {
               e.currentTarget.disabled = true
-              const { data, error } = await call('volunteer_check_in', {
+              const { data, error } = await call('volunteer_check_in_person', {
                 p_token: token,
-                p_registration_id: p.registration_id,
+                p_person_id: p.person_id,
               })
               if (applyOutcome(data, error, 'Marked present')) {
                 box.classList.add('hidden')
@@ -328,9 +346,9 @@ async function runSearch() {
     $('#confirm').classList.add('hidden')
     return
   }
-  const { data, error } = await call('volunteer_search', { p_token: token, p_query: q })
+  const { data, error } = await call('volunteer_search_people', { p_token: token, p_query: q })
   if (error || !data || !data.ok) {
-    if (data && ['invalid_access', 'revoked', 'expired', 'event_unavailable'].includes(data.error)) {
+    if (data && ['invalid_access', 'revoked', 'expired', 'event_unavailable', 'attendance_disabled'].includes(data.error)) {
       lockOut(explain(data))
       return
     }
@@ -351,6 +369,67 @@ function switchTab(which) {
   $('#tab-search').setAttribute('aria-selected', String(!scan))
   if (!scan) stopCamera()
   result.classList.add('hidden')
+}
+
+// ---------------------------------------------------------------------------
+// Walk-in: register a new visitor and mark them present in one step
+// ---------------------------------------------------------------------------
+function openWalkin() {
+  const form = $('#walkin-form')
+  const open = form.classList.contains('hidden')
+  form.classList.toggle('hidden', !open)
+  $('#walkin-toggle').setAttribute('aria-expanded', String(open))
+  if (open) {
+    // Carry over what was typed in the search box.
+    const q = $('#search').value.trim()
+    if (q) {
+      if (/^[+0-9][0-9 ()+-]{5,}$/.test(q)) $('#w-phone').value = $('#w-phone').value || q
+      else $('#w-name').value = $('#w-name').value || q
+    }
+    $('#w-name').focus()
+  }
+}
+
+async function submitWalkin(e) {
+  e.preventDefault()
+  const name = $('#w-name').value.trim()
+  const phone = $('#w-phone').value.trim()
+  if (name.length < 2) return showResult('error', 'Enter the full name', 'The visitor needs a name.')
+  if (phone.replace(/\D/g, '').length < 9) return showResult('error', 'Enter a phone number', 'For example 0712 345 678.')
+  if (!$('#w-consent').checked) return showResult('error', 'Consent needed', 'Tick the box to confirm the visitor agrees to their details being recorded.')
+
+  const button = e.submitter || $('#walkin-form button[type="submit"]')
+  button.disabled = true
+  try {
+    const { data, error } = await call('volunteer_register_walkin', {
+      p_token: token,
+      p_full_name: name,
+      p_phone: phone,
+      p_church_name: $('#w-church').value.trim(),
+      p_consent: $('#w-consent').checked,
+    })
+    if (error || !data || !data.ok) {
+      if (data && ['invalid_access', 'revoked', 'expired', 'event_unavailable', 'attendance_disabled'].includes(data.error)) {
+        lockOut(explain(data))
+        return
+      }
+      showResult('error', 'Not registered', explain(data, error))
+      return
+    }
+    if (data.result === 'already_checked_in') {
+      showResult('duplicate', 'Already marked present', `This person has already been marked present for this event. ${data.full_name} was checked in at ${formatDateTime(data.checked_in_at)}.`)
+    } else if (data.matched_existing) {
+      showResult('success', 'Marked present', `${data.full_name} was already in the system (${data.kind}) and is now marked present.`)
+    } else {
+      showResult('success', 'Visitor registered and marked present', `${data.full_name} is now marked present.`)
+    }
+    $('#walkin-form').reset()
+    $('#walkin-form').classList.add('hidden')
+    $('#walkin-toggle').setAttribute('aria-expanded', 'false')
+    await Promise.all([loadEvent(), runSearch()])
+  } finally {
+    button.disabled = false
+  }
 }
 
 async function init() {
@@ -382,6 +461,8 @@ async function init() {
     e.target.value = ''
   })
   $('#search').addEventListener('input', debounce(runSearch, 350))
+  $('#walkin-toggle').addEventListener('click', openWalkin)
+  $('#walkin-form').addEventListener('submit', submitWalkin)
 
   $('#manual-form').addEventListener('submit', async (e) => {
     e.preventDefault()

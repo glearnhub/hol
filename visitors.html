@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="robots" content="noindex" />
+    <title>Visitors · Handmaidens of the Lord</title>
+    <link rel="icon" type="image/png" sizes="64x64" href="img/favicon-64.png" />
+    <link rel="apple-touch-icon" href="img/apple-touch-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/styles.css" />
+    <link rel="stylesheet" href="css/admin.css" />
+  </head>
+  <body class="admin">
+    <div class="admin-layout">
+      <aside id="admin-sidebar" aria-label="Administration menu"></aside>
+      <div class="admin-content">
+        <header id="admin-topbar"></header>
+        <main id="page" class="hidden">
+          <div class="page-title">
+            <div>
+              <h1>Visitors</h1>
+              <div class="muted">People who registered or were checked in as visitors. Convert a visitor into a member without losing their history.</div>
+            </div>
+            <div class="row-actions">
+              <button id="add-person" class="btn btn-primary hidden" type="button">+ Add member</button>
+              <button id="export" class="btn btn-outline" type="button">Export CSV</button>
+            </div>
+          </div>
+          <div id="status" aria-live="polite"></div>
+          <div id="stats" class="stats"></div>
+
+          <section class="panel">
+            <div class="toolbar">
+              <div class="field grow">
+                <label for="search">Search</label>
+                <input id="search" type="search" placeholder="Name, phone number or ID (for example V-00012)" autocomplete="off" />
+              </div>
+              <div class="field">
+                <label for="f-status">Status</label>
+                <select id="f-status">
+                  <option value="all">All</option>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="f-attended">Attendance in the period</label>
+                <select id="f-attended">
+                  <option value="all">Everyone</option>
+                  <option value="some">Attended at least one meeting</option>
+                  <option value="none">Attended no meetings</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="f-from">From</label>
+                <input id="f-from" type="date" />
+              </div>
+              <div class="field">
+                <label for="f-to">To</label>
+                <input id="f-to" type="date" />
+              </div>
+              <div class="field">
+                <label for="f-sort">Sort by</label>
+                <select id="f-sort">
+                  <option value="name_asc">Name A–Z</option>
+                  <option value="name_desc">Name Z–A</option>
+                  <option value="attended_desc">Most meetings attended</option>
+                  <option value="attended_asc">Fewest meetings attended</option>
+                  <option value="last_attended_desc">Attended most recently</option>
+                  <option value="recent_desc">Newest first</option>
+                </select>
+              </div>
+            </div>
+            <div class="toolbar">
+              <label class="check-inline"><input id="f-review" type="checkbox" /> Needs review (possible duplicate)</label>
+              <label class="check-inline "><input id="f-repeat" type="checkbox" /> Repeat visitors (attended 2 or more times)</label>
+            </div>
+            <div id="table" class="table-wrap"></div>
+            <div class="pager">
+              <span id="range" class="muted"></span>
+              <div class="row-actions">
+                <button id="prev" class="btn btn-outline btn-small" type="button">Previous</button>
+                <button id="next" class="btn btn-outline btn-small" type="button">Next</button>
+              </div>
+            </div>
+          </section>
+
+          <dialog id="person-dialog" aria-labelledby="person-title">
+            <div class="dialog-head">
+              <h2 id="person-title">Add member</h2>
+              <button class="btn btn-outline btn-small" type="button" data-close>Close</button>
+            </div>
+            <form id="person-form" class="dialog-body" novalidate>
+              <div id="form-status" aria-live="polite"></div>
+              <div id="convert-note" class="notice notice-info hidden">
+                Check the details, then convert. This person keeps one record: their registrations and attendance history stay with them, and past events will still show them as a visitor.
+              </div>
+              <div id="dup-box" aria-live="polite"></div>
+              <div class="field" data-field="full_name">
+                <label for="p-name">Full name</label>
+                <input id="p-name" name="full_name" type="text" maxlength="100" autocomplete="off" required />
+                <div class="error"></div>
+              </div>
+              <div class="field-row">
+                <div class="field" data-field="phone">
+                  <label for="p-phone">Phone number</label>
+                  <input id="p-phone" name="phone" type="tel" inputmode="tel" placeholder="0712 345 678" autocomplete="off" required />
+                  <div class="hint">0712…, 712… and +254712… are the same number.</div>
+                  <div class="error"></div>
+                </div>
+                <div class="field" data-field="alt_phone">
+                  <label for="p-alt">Alternative phone (optional)</label>
+                  <input id="p-alt" name="alt_phone" type="tel" inputmode="tel" autocomplete="off" />
+                  <div class="error"></div>
+                </div>
+              </div>
+              <div class="field-row">
+                <div class="field" data-field="email">
+                  <label for="p-email">Email address (optional)</label>
+                  <input id="p-email" name="email" type="email" autocomplete="off" maxlength="254" />
+                  <div class="error"></div>
+                </div>
+                <div class="field" data-field="gender">
+                  <label for="p-gender">Gender (optional)</label>
+                  <select id="p-gender" name="gender">
+                    <option value="">Not given</option>
+                    <option value="female">Female</option>
+                    <option value="male">Male</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+              </div>
+              <div class="field-row">
+                <div class="field" data-field="church_name">
+                  <label for="p-church">Church (optional)</label>
+                  <input id="p-church" name="church_name" type="text" maxlength="150" autocomplete="off" />
+                </div>
+                <div class="field" data-field="ministry">
+                  <label for="p-ministry">Ministry, group or department (optional)</label>
+                  <input id="p-ministry" name="ministry" type="text" maxlength="100" autocomplete="off" />
+                </div>
+              </div>
+              <div class="field" data-field="membership_date">
+                <label for="p-date">Membership date (optional)</label>
+                <input id="p-date" name="membership_date" type="date" />
+                <div class="hint">Leave empty to use today's date.</div>
+              </div>
+              <div class="field" data-field="notes">
+                <label for="p-notes">Notes (optional)</label>
+                <textarea id="p-notes" name="notes" rows="3" maxlength="1000"></textarea>
+              </div>
+              <label id="review-box" class="check-inline hidden"><input id="p-review" type="checkbox" /> I have checked this record: clear the &ldquo;needs review&rdquo; flag</label>
+              <div class="row-actions">
+                <button id="person-submit" class="btn btn-primary" type="submit">Save member</button>
+                <button class="btn btn-outline" type="button" data-close>Cancel</button>
+              </div>
+            </form>
+          </dialog>
+
+          <dialog id="profile-dialog" aria-labelledby="profile-title">
+            <div class="dialog-head">
+              <h2 id="profile-title">Profile</h2>
+              <button class="btn btn-outline btn-small" type="button" data-close>Close</button>
+            </div>
+            <div id="profile-body" class="dialog-body"></div>
+          </dialog>
+        </main>
+      </div>
+    </div>
+    <script type="module">
+      import { initPeople } from './js/people.js'
+      initPeople('visitor')
+    </script>
+  </body>
+</html>

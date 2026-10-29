@@ -7,36 +7,47 @@ import { supabase, isConfigured } from './supabase-client.js'
 import { brandMark } from './layout.js'
 import { el, $, notice, notConfiguredNotice } from './ui.js'
 
+// Which sidebar items each role sees. (Hiding links is only a convenience: the database
+// refuses anything a role is not allowed to do.)
 const NAV = [
-  { key: 'dashboard', href: 'admin-dashboard.html', label: 'Dashboard', icon: '▦' },
-  { key: 'events', href: 'manage-events.html', label: 'Events', icon: '📅' },
-  { key: 'reports', href: 'reports.html', label: 'Reports', icon: '📊' },
+  { key: 'dashboard', href: 'admin-dashboard.html', label: 'Dashboard', icon: '▦', roles: ['admin'] },
+  { key: 'events', href: 'manage-events.html', label: 'Events', icon: '📅', roles: ['admin', 'manager'] },
+  { key: 'members', href: 'members.html', label: 'Members', icon: '👥', roles: ['admin'] },
+  { key: 'visitors', href: 'visitors.html', label: 'Visitors', icon: '🙋', roles: ['admin'] },
+  { key: 'ranking', href: 'attendance-ranking.html', label: 'Attendance ranking', icon: '🏆', roles: ['admin'] },
+  { key: 'reports', href: 'reports.html', label: 'Reports', icon: '📊', roles: ['admin', 'manager'] },
 ]
+
+export const ROLE_LABELS = { admin: 'Administrator', manager: 'Event manager' }
+
+// Where each role lands after signing in.
+const HOME = { admin: 'admin-dashboard.html', manager: 'manage-events.html' }
 
 export async function signOut() {
   await supabase.auth.signOut()
   window.location.href = 'admin.html'
 }
 
-async function isAdminUser(userId) {
+// The signed-in user's role ('admin', 'manager') or null when they have none.
+async function getRole(userId) {
   const { data, error } = await supabase
     .from('admin_roles')
     .select('role')
     .eq('user_id', userId)
     .maybeSingle()
-  return !error && Boolean(data)
+  return !error && data ? data.role : null
 }
 
-function renderShell(active, session) {
+function renderShell(active, session, role) {
   const sidebar = $('#admin-sidebar')
   const topbar = $('#admin-topbar')
 
   sidebar.replaceChildren(
-    el('a', { href: 'admin-dashboard.html', class: 'admin-brand' }, brandMark(34), el('span', {}, 'Handmaidens of the Lord')),
+    el('a', { href: HOME[role] || 'admin-dashboard.html', class: 'admin-brand' }, brandMark(34), el('span', {}, 'Handmaidens of the Lord')),
     el(
       'nav',
       { 'aria-label': 'Administration' },
-      ...NAV.map((n) =>
+      ...NAV.filter((n) => n.roles.includes(role)).map((n) =>
         el('a', { href: n.href, class: n.key === active ? 'active' : '' }, el('span', { 'aria-hidden': 'true' }, n.icon), n.label)
       )
     ),
@@ -58,7 +69,7 @@ function renderShell(active, session) {
       },
       '☰'
     ),
-    el('span', { class: 'muted topbar-email' }, session.user.email),
+    el('span', { class: 'muted topbar-email' }, `${session.user.email} · ${ROLE_LABELS[role] || role}`),
     el('button', { class: 'btn btn-outline btn-small', type: 'button', onclick: signOut }, 'Log out')
   )
 
@@ -97,8 +108,9 @@ function labelTables() {
   label()
 }
 
-// Call at the top of every admin page. Resolves with the session, or redirects.
-export async function requireAdmin(active) {
+// Call at the top of every admin page. Resolves with the session (session.role is the
+// user's role), or redirects. Pass { roles: ['admin', 'manager'] } on pages managers may use.
+export async function requireAdmin(active, { roles = ['admin'] } = {}) {
   const main = $('#page')
   if (!isConfigured) {
     main?.classList.remove('hidden')
@@ -113,13 +125,20 @@ export async function requireAdmin(active) {
     return null
   }
 
-  if (!(await isAdminUser(session.user.id))) {
+  const role = await getRole(session.user.id)
+  if (!role) {
     await supabase.auth.signOut()
     window.location.replace('admin.html?denied=1')
     return null
   }
+  if (!roles.includes(role)) {
+    // Signed in, but this page is not for their role: send them to their own home page.
+    window.location.replace(HOME[role] || 'admin.html')
+    return null
+  }
+  session.role = role
 
-  renderShell(active, session)
+  renderShell(active, session, role)
   labelTables()
   main?.classList.remove('hidden')
 
@@ -146,10 +165,11 @@ export async function initLogin() {
     notice(status, 'That account does not have administrator access.', 'error')
   }
 
-  // Already signed in as an admin: go straight to the dashboard.
+  // Already signed in: go straight to the right home page.
   const { data } = await supabase.auth.getSession()
-  if (data.session && (await isAdminUser(data.session.user.id))) {
-    window.location.replace('admin-dashboard.html')
+  const existingRole = data.session ? await getRole(data.session.user.id) : null
+  if (existingRole) {
+    window.location.replace(HOME[existingRole] || 'admin-dashboard.html')
     return
   }
 
@@ -167,12 +187,15 @@ export async function initLogin() {
 
     if (error || !result.session) {
       notice(status, 'Incorrect email or password.', 'error')
-    } else if (!(await isAdminUser(result.session.user.id))) {
-      await supabase.auth.signOut()
-      notice(status, 'That account does not have administrator access.', 'error')
     } else {
-      window.location.replace('admin-dashboard.html')
-      return
+      const role = await getRole(result.session.user.id)
+      if (!role) {
+        await supabase.auth.signOut()
+        notice(status, 'That account does not have administrator access.', 'error')
+      } else {
+        window.location.replace(HOME[role] || 'admin-dashboard.html')
+        return
+      }
     }
 
     button.disabled = false

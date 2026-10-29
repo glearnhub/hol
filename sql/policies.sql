@@ -160,6 +160,7 @@ grant execute on function public.admin_event_report(uuid) to authenticated;
 grant execute on function public.admin_reports_overview() to authenticated;
 grant execute on function public.admin_dashboard_stats() to authenticated;
 grant execute on function public.admin_event_links(uuid) to authenticated;
+grant execute on function public.staff_search_people(uuid, text) to authenticated;
 grant execute on function public.admin_registration_link(uuid, text, timestamptz) to authenticated;
 grant execute on function public.admin_set_person_attendance(uuid, uuid, boolean, text) to authenticated;
 grant execute on function public.admin_find_duplicates(text, text, text, text, uuid) to authenticated;

@@ -14,6 +14,7 @@ export function eventStatusBadge(status) {
   const map = {
     draft: ['Draft', 'muted'],
     published: ['Published', 'success'],
+    completed: ['Completed', 'info'],
     cancelled: ['Cancelled', 'error'],
   }
   const [label, tone] = map[status] || [status, 'muted']
@@ -36,4 +37,34 @@ export function errorText(e) {
   const msg = (e && e.message) || ''
   if (/not_authorized|permission denied/i.test(msg)) return 'You do not have permission to do that.'
   return msg || 'Something went wrong. Please try again.'
+}
+
+export const CATEGORIES = {
+  general: 'General',
+  service: 'Church service',
+  prayer: 'Prayer meeting',
+  fellowship: 'Fellowship',
+  training: 'Training',
+  leadership: 'Leadership meeting',
+  conference: 'Conference',
+  outreach: 'Outreach',
+  other: 'Other',
+}
+
+export const VISIBILITY = {
+  public: { label: 'Public', hint: 'Listed on the website; anyone can register.' },
+  private: { label: 'Private', hint: 'Never listed. People reach it only through its registration link.' },
+  internal: { label: 'Internal', hint: 'Never listed. For leadership and member meetings.' },
+}
+
+// "Member" / "Visitor" label that stays the same wherever it appears.
+export function kindBadge(kind) {
+  return kind === 'member'
+    ? el('span', { class: 'badge badge-success' }, 'Member')
+    : el('span', { class: 'badge badge-info' }, 'Visitor')
+}
+
+// A readable "M-00012" style number for display next to a name.
+export function personLabel(p) {
+  return p.label || ''
 }

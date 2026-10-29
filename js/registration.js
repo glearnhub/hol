@@ -36,21 +36,36 @@ export async function initRegistration() {
     return
   }
 
+  // Two ways in: the event's secret registration link (?t=...), which also works for
+  // private and internal events, or a public event from the website (?id=...).
+  const linkToken = (param('t') || '').trim()
   const id = param('id')
-  if (!isUuid(id)) {
-    notice(status, 'We could not find that event.', 'error')
-    return
+  let ev
+  if (linkToken) {
+    const { data, error } = await supabase.rpc('registration_link_event', { p_token: linkToken })
+    if (error || !data || !data.ok) {
+      notice(status, data?.message || 'This registration link is not valid.', 'error')
+      return
+    }
+    ev = data.event
+  } else {
+    if (!isUuid(id)) {
+      notice(status, 'We could not find that event.', 'error')
+      return
+    }
+    const { data, error } = await supabase.from('public_events').select('*').eq('id', id).maybeSingle()
+    if (error || !data) {
+      notice(status, 'This event is not available for registration.', 'error')
+      return
+    }
+    ev = data
   }
 
-  const { data: ev, error } = await supabase.from('public_events').select('*').eq('id', id).maybeSingle()
-  if (error || !ev) {
-    notice(status, 'This event is not available for registration.', 'error')
-    return
-  }
-
+  document.title = `Register for ${ev.name} · Handmaidens of the Lord`
   $('#event-summary').replaceChildren(
     el('h2', {}, ev.name),
-    el('p', { class: 'muted' }, `${formatSchedule(ev)} · ${ev.venue}`)
+    el('p', { class: 'muted' }, `${formatSchedule(ev)} · ${ev.venue}`),
+    linkToken && ev.description ? el('p', { class: 'event-description' }, ev.description) : null
   )
 
   if (ev.registration_state !== 'open') {
@@ -58,6 +73,7 @@ export async function initRegistration() {
       full: 'Sorry, this event is fully booked.',
       closed: 'Registration for this event has closed.',
       not_open: 'Registration for this event has not opened yet.',
+      unavailable: 'Registration is not available for this event.',
       ended: 'This event has already taken place.',
     }
     notice(status, messages[ev.registration_state] || 'Registration is not available.', 'warning')
@@ -101,14 +117,16 @@ export async function initRegistration() {
     submit.disabled = true
     submit.textContent = 'Registering…'
 
-    const { data, error: rpcError } = await supabase.rpc('register_participant', {
-      p_event_id: ev.id,
+    const person = {
       p_full_name: values.fullName,
       p_email: values.email.trim(),
       p_phone: values.phone,
       p_church_name: values.church,
       p_consent: form.consent.checked,
-    })
+    }
+    const { data, error: rpcError } = linkToken
+      ? await supabase.rpc('register_via_link', { p_token: linkToken, ...person })
+      : await supabase.rpc('register_participant', { p_event_id: ev.id, ...person })
 
     if (rpcError || !data) {
       notice(status, 'Something went wrong while registering. Please try again.', 'error')

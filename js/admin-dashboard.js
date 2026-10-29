@@ -21,8 +21,10 @@ export async function initDashboard() {
     $('#stats').replaceChildren(
       statCard(stats.total_events, 'Total events'),
       statCard(stats.upcoming_events, 'Upcoming events'),
+      statCard(stats.total_members, 'Active members'),
+      statCard(stats.total_visitors, 'Visitors on record'),
       statCard(stats.total_registrations, 'Total registrations'),
-      statCard(stats.total_attendees, 'Total attendees'),
+      statCard(stats.total_attendees, 'Registered people who attended'),
       statCard(stats.total_absentees, 'Absentees (completed events)')
     )
 
@@ -44,7 +46,7 @@ function renderRecent(events) {
     el(
       'table',
       { class: 'data' },
-      el('thead', {}, el('tr', {}, ...['Event', 'Date', 'Status', 'Registered', 'Attended', ''].map((h) => el('th', {}, h)))),
+      el('thead', {}, el('tr', {}, ...['Event', 'Date', 'Status', 'Registered', 'Present', ''].map((h) => el('th', {}, h)))),
       el(
         'tbody',
         {},
@@ -56,7 +58,7 @@ function renderRecent(events) {
             el('td', {}, formatDate(e.event_date)),
             el('td', {}, eventStatusBadge(e.status)),
             el('td', {}, `${e.registrations} / ${e.capacity}`),
-            el('td', {}, String(e.attendees)),
+            el('td', {}, `${e.unique_attendees ?? e.attendees} (${e.members_attended || 0} members, ${e.visitors_attended || 0} visitors)`),
             el('td', {}, el('a', { class: 'btn btn-outline btn-small', href: `event-registrations.html?id=${e.event_id}` }, 'Open'))
           )
         )
@@ -78,7 +80,8 @@ async function renderChart(events) {
       labels: events.map((e) => (e.name.length > 22 ? e.name.slice(0, 21) + '…' : e.name)),
       datasets: [
         { label: 'Registered', data: events.map((e) => e.registrations), backgroundColor: '#8e24aa' },
-        { label: 'Attended', data: events.map((e) => e.attendees), backgroundColor: '#15803D' },
+        { label: 'Members present', data: events.map((e) => e.members_attended || 0), backgroundColor: '#15803D' },
+        { label: 'Visitors present', data: events.map((e) => e.visitors_attended || 0), backgroundColor: '#e0a800' },
       ],
     },
     options: {

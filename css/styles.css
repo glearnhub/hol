@@ -871,3 +871,14 @@ body {
 .field.invalid .consent-label {
   color: var(--error);
 }
+
+.event-description {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  margin: 0.5rem 0 0;
+}
+
+.what-next {
+  margin: 0 0 1.25rem;
+  font-size: 0.95rem;
+}

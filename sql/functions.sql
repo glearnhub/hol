@@ -967,7 +967,10 @@ begin
 
   with base as (
     select
-      r.id, r.full_name, r.email, r.phone, r.church_name, r.registration_reference,
+      r.id, r.full_name,
+      case when private.is_admin_user() then r.email end as email,
+      case when private.is_admin_user() then r.phone else private.mask_phone(r.phone) end as phone,
+      r.church_name, r.registration_reference,
       r.status, r.created_at, a.checked_in_at, a.method as check_in_method,
       r.person_id, r.classification
     from public.registrations r
@@ -992,7 +995,10 @@ begin
 
   with base as (
     select
-      r.id, r.full_name, r.email, r.phone, r.church_name, r.registration_reference,
+      r.id, r.full_name,
+      case when private.is_admin_user() then r.email end as email,
+      case when private.is_admin_user() then r.phone else private.mask_phone(r.phone) end as phone,
+      r.church_name, r.registration_reference,
       r.status, r.created_at, a.checked_in_at, a.method as check_in_method,
       r.person_id, r.classification
     from public.registrations r
@@ -2825,5 +2831,48 @@ begin
       and (l.last_attended is null or l.last_attended < today - v_days)
   ) x;
   return jsonb_build_object('ok', true, 'days', v_days, 'rows', v_rows);
+end;
+$$;
+
+-- Staff (administrators and managers) look people up to mark them present by hand, for
+-- example a member who was missed at the door. Managers only see masked phone numbers.
+create or replace function public.staff_search_people(p_event_id uuid, p_query text)
+returns jsonb
+language plpgsql
+security definer
+stable
+set search_path = public, pg_temp
+as $$
+declare
+  q text := left(btrim(regexp_replace(coalesce(p_query, ''), '\s+', ' ', 'g')), 60);
+  digits text;
+  v_full boolean;
+  results jsonb;
+begin
+  perform private.require_staff();
+  v_full := private.is_admin_user();
+  if char_length(q) < 3 then
+    return private.fail('query_too_short', 'Type at least 3 characters.');
+  end if;
+  digits := regexp_replace(regexp_replace(q, '[^0-9]', '', 'g'), '^0+', '');
+
+  select coalesce(jsonb_agg(row_to_json(m)::jsonb order by m.full_name), '[]'::jsonb) into results
+  from (
+    select p.id as person_id, private.person_label(p) as label, p.kind, p.full_name,
+           case when v_full then p.phone else private.mask_phone(p.phone) end as phone,
+           exists (select 1 from public.registrations r
+                   where r.event_id = p_event_id and r.person_id = p.id and r.status = 'registered') as registered,
+           (a.id is not null) as checked_in, a.checked_in_at
+    from public.people p
+    left join public.attendance a on a.event_id = p_event_id and a.person_id = p.id
+    where p.status = 'active'
+      and (
+        lower(p.full_name) like '%' || lower(private.escape_like(q)) || '%' escape '\'
+        or (char_length(digits) >= 4 and (p.phone like '%' || digits || '%' or p.alt_phone like '%' || digits || '%'))
+      )
+    order by p.full_name
+    limit 15
+  ) m;
+  return jsonb_build_object('ok', true, 'results', results);
 end;
 $$;

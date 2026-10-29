@@ -351,3 +351,107 @@ Duplicate checks still use the phone number (and the email, when one is given). 
 email panel lists only the attendees who gave an email address and says how many did not.
 To apply this to an existing database, re-run `sql/schema.sql` then `sql/functions.sql` and
 `sql/policies.sql`.
+
+## Members, visitors and attendance
+
+### The model in one paragraph
+
+Every person is **one record** in `people`, identified by their normalised phone number
+(`0712…`, `712…`, `254712…` and `+254 712…` are the same number). A person is a *member* or a
+*visitor*; converting a visitor changes that one record, so their registrations and attendance
+stay attached. Each registration and each attendance record also remembers what the person
+**was at that moment** (`classification`), so a visitor who becomes a member in March still
+shows as a visitor in January's report. A registration never counts as attendance: a person
+is counted only when an usher (or staff) checks them in. At most one attendance record exists
+per person per event.
+
+Display numbers: `M-00012` for a member, `V-00012` for a visitor. The number stays the same
+when a visitor is converted.
+
+### Roles
+
+| Role | Can do |
+|---|---|
+| **Administrator** (`admin_roles.role = 'admin'`) | Everything: events, links, members, visitors, conversion, reports with full phone numbers, annual ranking, corrections |
+| **Event manager** (`'manager'`) | See events, record and correct attendance, open event reports. Phone numbers are partly hidden and email addresses are not shown. Cannot create events, manage links, register or convert people, or cancel registrations |
+| **Usher** | Anyone holding an event's *attendance link* (no account): search by name or phone, mark people present, register walk-ins (if the link allows it). Sees only a name, a masked phone and member/visitor |
+| **Visitor / member** | Registers through the event's registration link (or the website for public events) |
+
+Roles are granted in the SQL editor only:
+
+```sql
+insert into public.admin_roles (user_id, role)
+select id, 'manager' from auth.users where email = 'MANAGER-EMAIL-HERE';
+```
+
+Managers are not limited to particular events (there is no per-event assignment).
+
+### Events and their two links
+
+Every event has a **category**, a **visibility** (public, private or internal), and switches
+for **attendance** and **registration**. Private and internal events are never listed on the
+website. When an event is created it gets:
+
+* a **registration link** (`register.html?t=…`): for visitors and others to register, and the
+  only way into a private or internal event. Registering does not mark anyone present;
+* an **attendance link** (`check-in.html#…`) for ushers, valid until three days after the event.
+
+Open **Events → Event links** to copy, open, show a QR code for, regenerate or disable them,
+and to create more labelled attendance links (with or without permission to register walk-ins).
+Regenerating or revoking a link stops the old one immediately. Tokens are long random values,
+never database IDs, and the table that holds them cannot be read through the website's API.
+
+### Day to day
+
+1. **Register a member:** *Members → Add member*. While you type, the page warns about people
+   with the same phone number, email or a similar name. The same phone number is refused; a
+   similar name can be added after you have looked at the existing record.
+2. **Visitors register** through the registration link. A returning visitor is recognised by
+   phone number and gets no second profile. A very different name on an existing number is not
+   merged: the person is flagged *Needs review*.
+3. **At the door** the usher opens the attendance link, searches a name or phone number, and
+   taps *Mark Present*. A second tap says *This person has already been marked present for this
+   event.* Someone not in the list is registered and marked present in one step (name, phone,
+   consent).
+4. **Convert a visitor:** *Visitors → Convert to member*. Check the details and confirm.
+5. **Corrections:** *Events → Attendance* has a search to mark anyone present or remove a
+   mistake. Removed records are copied to `attendance_corrections` with who, when and why.
+6. **Reports:** *Reports* shows members who attended, visitors who attended, registered people
+   who did not come, and the registration list with ✓ / ✗. Export CSV or print to PDF.
+7. **Annual attendance:** *Attendance ranking* ranks people by meetings attended in a year.
+
+### Annual ranking rules
+
+* A meeting counts when it is **published or completed**, has **attendance recording on**, and
+  its **date** falls in the selected year. Drafts and cancelled events never count.
+* Each person counts **once per meeting**. Registering without being checked in counts for nothing.
+* Ties share a rank and the next rank skips ahead (1, 2, 2, 4).
+* *Members* means people who are members **now**, with all their attendance in the year. Event
+  reports, in contrast, use what each person was **at that event**.
+* Participation rate = member attendances ÷ (meetings held × active members).
+* "Meetings held" counts eligible meetings dated today or earlier.
+* Not implemented: improving / declining attendance, and separate sessions within one event
+  (an event is counted once per person).
+
+### Upgrading an existing database
+
+1. **Back up first.** In Supabase: *Database → Backups* (or *Project settings → Database* to
+   download a backup). Keep it until you have checked the site.
+2. In the SQL editor run, in this order, the whole of: `sql/schema.sql`, `sql/functions.sql`,
+   `sql/policies.sql`. All three can be run again safely.
+3. The upgrade links old data automatically: every distinct phone number among the old
+   registrations becomes one **visitor**, and old registrations and attendance are attached to
+   it. Nothing is deleted. Convert regular people to members on the *Visitors* page. Existing
+   events become public events with both links created.
+4. Deploy the website code (push to the repository; Vercel deploys it).
+
+**Rollback:** restore the backup from step 1 and redeploy the previous commit. The previous
+version of the SQL is `git show 0088ca9:sql/schema.sql` (and `functions.sql`, `policies.sql`).
+The upgrade test `tests/migration.test.mjs` builds a database with that version, fills it with
+data, applies the new scripts and checks that nothing was lost.
+
+### Tests
+
+`cd tests && npm install && npm test` runs `db.test.mjs` (the database rules, including the
+new members, visitors, links, ushers, reports and ranking) and `migration.test.mjs` (the
+upgrade). They run against an in-memory PostgreSQL (PGlite), not your live Supabase project.

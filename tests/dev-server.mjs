@@ -57,11 +57,14 @@ await ev('Internal Planning (draft)', 10, 'draft')
 const adminUser = (await db.query(`insert into auth.users (email) values ('admin@example.com') returning id`)).rows[0].id
 await db.exec(`insert into public.admin_roles (user_id) values ('${adminUser}')`)
 const memberUser = (await db.query(`insert into auth.users (email) values ('member@example.com') returning id`)).rows[0].id
+const managerUser = (await db.query(`insert into auth.users (email) values ('manager@example.com') returning id`)).rows[0].id
+await db.exec(`insert into public.admin_roles (user_id, role) values ('${managerUser}', 'manager')`)
 
 // Fake sessions: token -> user. Credentials: email / 'test-password'.
 const USERS = {
   'admin@example.com': { id: adminUser, token: 'admin-test-token' },
   'member@example.com': { id: memberUser, token: 'member-test-token' },
+  'manager@example.com': { id: managerUser, token: 'manager-test-token' },
 }
 const byToken = (t) => Object.entries(USERS).find(([, u]) => u.token === t)
 const fakeJwt = (email, u) => {
@@ -84,6 +87,31 @@ const link = (await db.query(
 )).rows[0].r
 await db.exec('reset role')
 await db.query(`select set_config('request.jwt.claim.sub', '', false)`)
+
+// Members, visitors and a few past meetings this year, so the new pages have data to show.
+const person = async (kind, name, phone, ministry = null) =>
+  (await db.query(`insert into public.people (kind, full_name, phone, ministry, membership_date) values ($1, $2, $3, $4, current_date - 400) returning id`, [kind, name, phone, ministry])).rows[0].id
+const esther = await person('member', 'Esther Wambui Kamau', '+254702499324', 'Choir')
+const ruth = await person('member', 'Ruth Chebet', '+254711000002', 'Ushers')
+const mary = await person('member', 'Mary Atieno', '+254711000003')
+await person('member', 'Joy Akinyi', '+254711000004', 'Hospitality')
+const vera = await person('visitor', 'Vera Visiting', '+254722000001')
+const lucy = await person('visitor', 'Lucy Njeri', '+254722000002')
+const pastEvent = async (name, offsetDays, category) =>
+  (await db.query(
+    `insert into public.events (name, venue, event_date, start_time, capacity, status, category)
+     values ($1, 'Grace Chapel, Nairobi', (now() at time zone 'Africa/Nairobi')::date - $2::int, '10:00', 200, 'published', $3) returning id`,
+    [name, offsetDays, category])).rows[0].id
+const p1 = await pastEvent('Sunday Service', 30, 'service')
+const p2 = await pastEvent('Prayer Night', 24, 'prayer')
+const p3 = await pastEvent('Leaders Training', 16, 'training')
+const p4 = await pastEvent('Fellowship Lunch', 9, 'fellowship')
+const mark = (ev, who) => db.query(`insert into public.attendance (event_id, person_id, method, checked_in_by) values ($1, $2, 'admin', 'seed') on conflict do nothing`, [ev, who])
+for (const ev of [p1, p2, p3, p4]) await mark(ev, esther)
+for (const ev of [p1, p2, p3]) await mark(ev, ruth)
+for (const ev of [p1, p4]) await mark(ev, mary)
+for (const ev of [p1, p3]) await mark(ev, vera)
+await mark(p2, lucy)
 
 writeFileSync(path.join(here, '.dev-info.json'), JSON.stringify({
   conference, small, volunteerToken: link.token, port: PORT,

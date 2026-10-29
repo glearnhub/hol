@@ -1,9 +1,10 @@
-// Create, edit, publish, cancel events; upload posters; manage volunteer check-in links.
+// Create, edit, publish, complete, cancel events; upload posters; manage the registration
+// link and the ushers' attendance links. Event managers can see the list but not change it.
 import QRCode from 'https://cdn.jsdelivr.net/npm/qrcode@1.5.4/+esm'
 import { supabase } from './supabase-client.js'
 import { requireAdmin } from './admin-auth.js'
 import { POSTER_BUCKET, posterUrls } from './posters.js'
-import { callRpc, eventStatusBadge, errorText } from './admin-common.js'
+import { callRpc, eventStatusBadge, errorText, CATEGORIES, VISIBILITY } from './admin-common.js'
 import { el, $, param, formatDate, formatTimeRange, formatSchedule, formatDateTime, notice, toast } from './ui.js'
 
 const MAX_POSTER_BYTES = 2 * 1024 * 1024
@@ -13,6 +14,8 @@ let events = []
 let counts = new Map()
 let editing = null // the event being edited, or null when creating
 let linksEventId = null
+let linksEvent = null
+let canEdit = false // administrators only; managers get a read-only list
 
 // ---------------------------------------------------------------------------
 // Event list
@@ -36,35 +39,50 @@ async function loadEvents() {
 function renderEvents() {
   const host = $('#events')
   if (events.length === 0) {
-    host.replaceChildren(el('p', { class: 'muted' }, 'No events yet. Click "New event" to create one.'))
+    host.replaceChildren(el('p', { class: 'muted' }, canEdit ? 'No events yet. Click "New event" to create one.' : 'There are no events yet.'))
     return
   }
 
   const rows = events.map((ev) => {
-    const c = counts.get(ev.id) || { registrations: 0, attendees: 0 }
+    const c = counts.get(ev.id) || { registrations: 0, attendees: 0, members_attended: 0, visitors_attended: 0, unique_attendees: 0 }
+    const button = (label, onclick, kind = 'outline') =>
+      el('button', { class: `btn btn-${kind} btn-small`, type: 'button', onclick }, label)
     const actions = el(
       'div',
       { class: 'row-actions' },
-      el('button', { class: 'btn btn-outline btn-small', type: 'button', onclick: () => openEventForm(ev) }, 'Edit'),
-      el('a', { class: 'btn btn-outline btn-small', href: `event-registrations.html?id=${ev.id}` }, 'Registrations'),
-      el('button', { class: 'btn btn-outline btn-small', type: 'button', onclick: () => openLinks(ev) }, 'Check-in links'),
-      ev.status === 'published'
-        ? el('button', { class: 'btn btn-outline btn-small', type: 'button', onclick: () => setStatus(ev, 'draft') }, 'Unpublish')
-        : null,
-      ev.status === 'draft'
-        ? el('button', { class: 'btn btn-secondary btn-small', type: 'button', onclick: () => setStatus(ev, 'published') }, 'Publish')
-        : null,
-      ev.status !== 'cancelled'
+      canEdit ? button('Edit', () => openEventForm(ev)) : null,
+      el('a', { class: 'btn btn-outline btn-small', href: `event-registrations.html?id=${ev.id}` }, 'Attendance'),
+      el('a', { class: 'btn btn-outline btn-small', href: `reports.html?id=${ev.id}` }, 'Report'),
+      canEdit ? button('Event links', () => openLinks(ev)) : null,
+      canEdit && ev.status === 'published' ? button('Unpublish', () => setStatus(ev, 'draft')) : null,
+      canEdit && ev.status === 'published' ? button('Mark completed', () => completeEvent(ev)) : null,
+      canEdit && ev.status === 'draft' ? button('Publish', () => setStatus(ev, 'published'), 'secondary') : null,
+      canEdit && ev.status === 'completed' ? button('Reopen', () => setStatus(ev, 'published')) : null,
+      canEdit && ev.status !== 'cancelled'
         ? el('button', { class: 'btn btn-danger btn-small', type: 'button', onclick: () => cancelEvent(ev) }, 'Cancel event')
-        : el('button', { class: 'btn btn-outline btn-small', type: 'button', onclick: () => setStatus(ev, 'draft') }, 'Restore as draft')
+        : canEdit
+          ? button('Restore as draft', () => setStatus(ev, 'draft'))
+          : null
     )
+    const vis = VISIBILITY[ev.visibility] || VISIBILITY.public
+    const flags = [
+      CATEGORIES[ev.category] || 'General',
+      vis.label,
+      ev.attendance_enabled ? null : 'attendance off',
+      ev.registration_enabled ? null : 'registration off',
+    ].filter(Boolean)
     return el(
       'tr',
       {},
-      el('td', {}, el('strong', {}, ev.name), el('div', { class: 'muted' }, ev.venue)),
+      el('td', {}, el('strong', {}, ev.name), el('div', { class: 'muted' }, ev.venue), el('div', { class: 'muted' }, flags.join(' · '))),
       el('td', {}, formatDate(ev.event_date), el('div', { class: 'muted' }, formatSchedule(ev).slice(formatDate(ev.event_date).length).replace(/^[ ,·]+/, ''))),
       el('td', {}, eventStatusBadge(ev.status)),
-      el('td', {}, `${c.registrations} / ${ev.capacity}`, el('div', { class: 'muted' }, `${c.attendees} attended`)),
+      el(
+        'td',
+        {},
+        `${c.registrations} / ${ev.capacity} registered`,
+        el('div', { class: 'muted' }, `${c.members_attended || 0} members · ${c.visitors_attended || 0} visitors attended`)
+      ),
       el('td', {}, actions)
     )
   })
@@ -73,7 +91,7 @@ function renderEvents() {
     el(
       'table',
       { class: 'data' },
-      el('thead', {}, el('tr', {}, ...['Event', 'When', 'Status', 'Registered', 'Actions'].map((h) => el('th', {}, h)))),
+      el('thead', {}, el('tr', {}, ...['Event', 'When', 'Status', 'Registered and attended', 'Actions'].map((h) => el('th', {}, h)))),
       el('tbody', {}, ...rows)
     )
   )
@@ -85,8 +103,13 @@ async function setStatus(ev, status) {
     toast(errorText(error), 'error')
     return
   }
-  toast(status === 'published' ? 'Event published' : status === 'draft' ? 'Event moved to drafts' : 'Event updated')
+  toast(status === 'published' ? 'Event published' : status === 'draft' ? 'Event moved to drafts' : status === 'completed' ? 'Event marked as completed' : 'Event updated')
   await loadEvents()
+}
+
+async function completeEvent(ev) {
+  if (!confirm(`Mark "${ev.name}" as completed? It will show as finished and no more registrations or check-ins will be accepted.`)) return
+  await setStatus(ev, 'completed')
 }
 
 async function cancelEvent(ev) {
@@ -151,6 +174,10 @@ function openEventForm(ev = null) {
     form.end_time.value = (ev.end_time || '').slice(0, 5)
     form.capacity.value = ev.capacity
     form.show_remaining.value = String(ev.show_remaining)
+    form.category.value = ev.category || 'general'
+    form.visibility.value = ev.visibility || 'public'
+    form.attendance_enabled.value = String(ev.attendance_enabled !== false)
+    form.registration_enabled.value = String(ev.registration_enabled !== false)
     form.registration_opens_at.value = toLocalInput(ev.registration_opens_at)
     form.registration_closes_at.value = toLocalInput(ev.registration_closes_at)
   }
@@ -187,6 +214,10 @@ function readForm(form) {
     end_time: form.end_time.value || null,
     capacity: num(form.capacity.value),
     show_remaining: form.show_remaining.value === 'true',
+    category: form.category.value,
+    visibility: form.visibility.value,
+    attendance_enabled: form.attendance_enabled.value === 'true',
+    registration_enabled: form.registration_enabled.value === 'true',
     opens: form.registration_opens_at.value ? new Date(form.registration_opens_at.value) : null,
     closes: form.registration_closes_at.value ? new Date(form.registration_closes_at.value) : null,
     file: form.poster.files[0] || null,
@@ -258,6 +289,10 @@ async function saveEvent(statusChoice) {
       end_time: v.end_time,
       capacity: v.capacity,
       show_remaining: v.show_remaining,
+      category: v.category,
+      visibility: v.visibility,
+      attendance_enabled: v.attendance_enabled,
+      registration_enabled: v.registration_enabled,
       registration_opens_at: v.opens ? v.opens.toISOString() : null,
       registration_closes_at: v.closes ? v.closes.toISOString() : null,
       poster_path: posterPath,
@@ -290,68 +325,159 @@ async function saveEvent(statusChoice) {
 }
 
 // ---------------------------------------------------------------------------
-// Volunteer check-in links
+// Event links: one registration link and the ushers' attendance links
 // ---------------------------------------------------------------------------
 function checkInUrl(token) {
   return new URL('check-in.html', window.location.href).href + '#' + token
 }
 
+function registrationUrl(token) {
+  return new URL('register.html', window.location.href).href + '?t=' + token
+}
+
+async function copyText(text, done = 'Link copied') {
+  try {
+    await navigator.clipboard.writeText(text)
+    toast(done)
+  } catch {
+    toast('Select the link and copy it manually', 'error')
+  }
+}
+
+async function qrCanvas(url, size) {
+  const canvas = el('canvas', { width: size, height: size, 'aria-label': 'QR code of the link' })
+  await QRCode.toCanvas(canvas, url, { width: size, margin: 1, color: { dark: '#600086', light: '#FFFFFF' } })
+  return canvas
+}
+
 async function openLinks(ev) {
   linksEventId = ev.id
-  $('#links-title').textContent = `Check-in links: ${ev.name}`
+  linksEvent = ev
+  $('#links-title').textContent = `Event links: ${ev.name}`
   $('#new-link').replaceChildren()
   $('#links-status').replaceChildren()
+  $('#reg-link').replaceChildren(el('p', { class: 'muted' }, 'Loading…'))
   $('#links-dialog').showModal()
   await loadLinks()
 }
 
 async function loadLinks() {
+  let data
+  try {
+    data = await callRpc('admin_event_links', { p_event_id: linksEventId })
+  } catch (err) {
+    notice($('#links-status'), errorText(err), 'error')
+    return
+  }
+  const c = counts.get(linksEventId) || {}
+  $('#links-stats').replaceChildren(
+    statBox(c.registrations ?? 0, 'Registered'),
+    statBox(c.members_attended ?? 0, 'Members present'),
+    statBox(c.visitors_attended ?? 0, 'Visitors present'),
+    statBox(c.unique_attendees ?? 0, 'Total present')
+  )
+  await renderRegistrationLink(data)
+  renderAttendanceLinks(data.attendance_links || [])
+}
+
+function statBox(value, label) {
+  return el('div', { class: 'stat' }, el('div', { class: 'value' }, String(value)), el('div', { class: 'label' }, label))
+}
+
+async function renderRegistrationLink(data) {
+  const host = $('#reg-link')
+  const link = data.registration_link
+  const notes = []
+  if (data.event.status !== 'published') {
+    notes.push('The event is not published yet, so the link will say it is not available until you publish it.')
+  }
+  if (!data.event.registration_enabled) {
+    notes.push('Registration is switched off for this event. Edit the event to turn it on.')
+  }
+  if (data.event.visibility === 'public') {
+    notes.push('This is a public event: people can also register from the website.')
+  }
+  const noteBox = notes.map((n) => el('div', { class: 'notice notice-info', style: 'margin:.5rem 0' }, n))
+
+  if (!link) {
+    host.replaceChildren(
+      ...noteBox,
+      el('p', { class: 'muted' }, 'There is no active registration link. People cannot register through a link until you create one.'),
+      el('button', { class: 'btn btn-primary btn-small', type: 'button', onclick: () => registrationAction('create') }, 'Create registration link')
+    )
+    return
+  }
+
+  const url = registrationUrl(link.token)
+  const canvas = await qrCanvas(url, 150)
+  host.replaceChildren(
+    ...noteBox,
+    el('div', { class: 'link-box', style: 'margin:.5rem 0' }, url),
+    el(
+      'div',
+      { class: 'row-actions' },
+      el('button', { class: 'btn btn-primary btn-small', type: 'button', onclick: () => copyText(url) }, 'Copy link'),
+      el('a', { class: 'btn btn-outline btn-small', href: url, target: '_blank', rel: 'noopener' }, 'Open to test'),
+      el('button', { class: 'btn btn-outline btn-small', type: 'button', onclick: () => registrationAction('regenerate') }, 'New link'),
+      el('button', { class: 'btn btn-danger btn-small', type: 'button', onclick: () => registrationAction('disable') }, 'Disable link')
+    ),
+    el('p', { class: 'muted', style: 'margin:.75rem 0 .25rem' }, 'Or let people scan this QR code to open the registration form:'),
+    canvas
+  )
+}
+
+async function registrationAction(action) {
+  if (action === 'regenerate' && !confirm('Create a new registration link? The current link will stop working immediately, including anything already shared.')) return
+  if (action === 'disable' && !confirm('Disable the registration link? Anyone opening it will be told it is no longer active.')) return
+  try {
+    await callRpc('admin_registration_link', { p_event_id: linksEventId, p_action: action })
+    toast(action === 'disable' ? 'Registration link disabled' : action === 'regenerate' ? 'New registration link created' : 'Registration link created')
+    await loadLinks()
+  } catch (err) {
+    notice($('#links-status'), errorText(err), 'error')
+  }
+}
+
+function renderAttendanceLinks(list) {
   const host = $('#links-list')
-  const { data, error } = await supabase
-    .from('volunteer_access')
-    .select('id, label, expires_at, revoked_at, last_used_at, created_at')
-    .eq('event_id', linksEventId)
-    .order('created_at', { ascending: false })
-
-  if (error) {
-    notice($('#links-status'), errorText(error), 'error')
+  if (!list.length) {
+    host.replaceChildren(el('p', { class: 'muted' }, 'No attendance links yet. Create one below.'))
     return
   }
-  if (!data.length) {
-    host.replaceChildren(el('p', { class: 'muted' }, 'No links yet. Create one above.'))
-    return
-  }
-
-  const now = Date.now()
   host.replaceChildren(
     el(
       'table',
       { class: 'data' },
-      el('thead', {}, el('tr', {}, ...['Label', 'Status', 'Expires', 'Last used', ''].map((h) => el('th', {}, h)))),
+      el('thead', {}, el('tr', {}, ...['Label', 'Status', 'Expires', 'Last used', 'Walk-ins', ''].map((h) => el('th', {}, h)))),
       el(
         'tbody',
         {},
-        ...data.map((l) => {
+        ...list.map((l) => {
           const revoked = Boolean(l.revoked_at)
-          const expired = new Date(l.expires_at).getTime() <= now
+          const expired = l.expires_at && new Date(l.expires_at).getTime() <= Date.now()
           const badge = revoked
             ? el('span', { class: 'badge badge-error' }, 'Revoked')
             : expired
               ? el('span', { class: 'badge badge-muted' }, 'Expired')
               : el('span', { class: 'badge badge-success' }, 'Active')
+          const url = l.token ? checkInUrl(l.token) : null
           return el(
             'tr',
             {},
             el('td', {}, l.label),
             el('td', {}, badge),
-            el('td', {}, formatDateTime(l.expires_at)),
+            el('td', {}, l.expires_at ? formatDateTime(l.expires_at) : 'Never'),
             el('td', {}, l.last_used_at ? formatDateTime(l.last_used_at) : 'Never'),
+            el('td', {}, l.allow_walkins ? 'Yes' : 'No'),
             el(
               'td',
               {},
               el(
                 'div',
                 { class: 'row-actions' },
+                url && l.active ? el('button', { class: 'btn btn-primary btn-small', type: 'button', onclick: () => copyText(url) }, 'Copy link') : null,
+                url && l.active ? el('a', { class: 'btn btn-outline btn-small', href: url, target: '_blank', rel: 'noopener' }, 'Open') : null,
+                url && l.active ? el('button', { class: 'btn btn-outline btn-small', type: 'button', onclick: () => showQr(l, url) }, 'QR') : null,
                 el('button', { class: 'btn btn-outline btn-small', type: 'button', onclick: () => regenerate(l) }, 'New link'),
                 !revoked
                   ? el('button', { class: 'btn btn-danger btn-small', type: 'button', onclick: () => revoke(l) }, 'Revoke')
@@ -365,40 +491,13 @@ async function loadLinks() {
   )
 }
 
-async function showNewLink(result, label) {
-  const url = checkInUrl(result.token)
-  const canvas = el('canvas', { width: 180, height: 180, 'aria-label': 'QR code of the check-in link' })
-  await QRCode.toCanvas(canvas, url, { width: 180, margin: 1, color: { dark: '#600086', light: '#FFFFFF' } })
-
+async function showQr(link, url) {
   $('#new-link').replaceChildren(
     el(
       'div',
-      { class: 'notice notice-success' },
-      el('strong', {}, `Link created for "${label}". `),
-      'Copy it now: for security it cannot be shown again.',
-      el('div', { class: 'link-box', style: 'margin:.75rem 0' }, url),
-      el(
-        'div',
-        { class: 'row-actions' },
-        el(
-          'button',
-          {
-            class: 'btn btn-primary btn-small',
-            type: 'button',
-            onclick: async () => {
-              try {
-                await navigator.clipboard.writeText(url)
-                toast('Link copied')
-              } catch {
-                toast('Select the link and copy it manually', 'error')
-              }
-            },
-          },
-          'Copy link'
-        )
-      ),
-      el('p', { class: 'muted', style: 'margin:.75rem 0 .25rem' }, 'Or scan this with the volunteer\'s phone:'),
-      canvas
+      { class: 'notice notice-info' },
+      el('strong', {}, `"${link.label}": scan to open on the usher's phone`),
+      el('div', { style: 'margin-top:.5rem' }, await qrCanvas(url, 180))
     )
   )
 }
@@ -414,14 +513,15 @@ async function createLink(e) {
   }
   try {
     const expires = new Date(Date.now() + days * 24 * 3600 * 1000).toISOString()
-    const result = await callRpc('admin_create_volunteer_link', {
+    await callRpc('admin_create_volunteer_link', {
       p_event_id: linksEventId,
       p_label: label,
       p_expires_at: expires,
+      p_allow_walkins: $('#l-walkins').checked,
     })
     status.replaceChildren()
     $('#l-label').value = ''
-    await showNewLink(result, label)
+    toast(`Link "${label}" created`)
     await loadLinks()
   } catch (err) {
     notice(status, errorText(err), 'error')
@@ -443,8 +543,8 @@ async function regenerate(link) {
   if (!confirm(`Create a new link for "${link.label}"? The old one will stop working.`)) return
   try {
     const expires = new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString()
-    const result = await callRpc('admin_regenerate_volunteer_link', { p_access_id: link.id, p_expires_at: expires })
-    await showNewLink(result, link.label)
+    await callRpc('admin_regenerate_volunteer_link', { p_access_id: link.id, p_expires_at: expires })
+    toast('New link created')
     await loadLinks()
   } catch (err) {
     notice($('#links-status'), errorText(err), 'error')
@@ -453,8 +553,13 @@ async function regenerate(link) {
 
 // ---------------------------------------------------------------------------
 export async function initManageEvents() {
-  const session = await requireAdmin('events')
+  const session = await requireAdmin('events', { roles: ['admin', 'manager'] })
   if (!session) return
+  canEdit = session.role === 'admin'
+  if (!canEdit) {
+    $('#new-event').classList.add('hidden')
+    notice($('#status'), 'You can see the events and record attendance. Only administrators can create or change events.', 'info')
+  }
 
   $('#new-event').addEventListener('click', () => openEventForm(null))
   for (const dialog of document.querySelectorAll('dialog')) {
@@ -482,5 +587,5 @@ export async function initManageEvents() {
   $('#link-form').addEventListener('submit', createLink)
 
   await loadEvents()
-  if (param('new')) openEventForm(null)
+  if (canEdit && param('new')) openEventForm(null)
 }

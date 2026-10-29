@@ -18,6 +18,11 @@ export function el(tag, attrs = {}, ...children) {
   return node
 }
 
+// Replaces a container's content, skipping empty slots (replaceChildren would print "null").
+export function setChildren(host, ...children) {
+  host.replaceChildren(...children.flat().filter((c) => c !== null && c !== undefined && c !== false))
+}
+
 export const $ = (selector, root = document) => root.querySelector(selector)
 export const $$ = (selector, root = document) => [...root.querySelectorAll(selector)]
 
@@ -132,6 +137,7 @@ export const REGISTRATION_STATE = {
   full: { label: 'Fully booked', tone: 'error' },
   closed: { label: 'Registration closed', tone: 'muted' },
   not_open: { label: 'Opens soon', tone: 'info' },
+  unavailable: { label: 'Registration unavailable', tone: 'muted' },
   ended: { label: 'Event ended', tone: 'muted' },
 }
 
@@ -181,4 +187,9 @@ export const CHECKIN_ERRORS = {
   not_found: 'No matching registration was found for this event.',
   outside_window: 'Check-in is not open for this event right now.',
   query_too_short: 'Type at least 3 characters.',
+  attendance_disabled: 'Attendance is not being recorded for this event.',
+  walkins_not_allowed: 'This link cannot register new visitors. Ask an administrator.',
+  consent_required: 'Confirm that the visitor agrees to their details being recorded.',
+  invalid_name: 'Enter the visitor\'s full name.',
+  invalid_phone: 'Enter a valid phone number, for example 0712 345 678.',
 }

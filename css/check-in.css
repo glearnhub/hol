@@ -222,3 +222,36 @@ body.checkin {
 #camera-help button {
   margin-top: 0.5rem;
 }
+
+/* Walk-in visitor form */
+#walkin-wrap {
+  margin-top: 1rem;
+}
+#walkin-form label:not(.ci-check) {
+  display: block;
+  font-weight: 600;
+  margin: 0.75rem 0 0.25rem;
+}
+#walkin-form input[type='text'],
+#walkin-form input[type='tel'] {
+  width: 100%;
+  min-height: 48px;
+  font-size: 16px;
+  padding: 0.6rem 0.8rem;
+  border: 1.5px solid #d1d5db;
+  border-radius: 10px;
+}
+.ci-check {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  margin: 1rem 0;
+  font-size: 0.95rem;
+}
+.ci-check input {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  margin-top: 0.1rem;
+  accent-color: var(--primary);
+}

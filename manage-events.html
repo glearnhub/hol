@@ -51,6 +51,31 @@
                 <div class="error"></div>
               </div>
               <div class="field-row">
+                <div class="field" data-field="category">
+                  <label for="f-category">Event type</label>
+                  <select id="f-category" name="category">
+                    <option value="general">General</option>
+                    <option value="service">Church service</option>
+                    <option value="prayer">Prayer meeting</option>
+                    <option value="fellowship">Fellowship</option>
+                    <option value="training">Training</option>
+                    <option value="leadership">Leadership meeting</option>
+                    <option value="conference">Conference</option>
+                    <option value="outreach">Outreach</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div class="field" data-field="visibility">
+                  <label for="f-visibility">Who can see it</label>
+                  <select id="f-visibility" name="visibility">
+                    <option value="public">Public: listed on the website</option>
+                    <option value="private">Private: only people with its registration link</option>
+                    <option value="internal">Internal: leaders and members, not listed</option>
+                  </select>
+                  <div class="hint">Private and internal events are never shown on the public site. People reach them only through the links in &ldquo;Event links&rdquo;.</div>
+                </div>
+              </div>
+              <div class="field-row">
                 <div class="field" data-field="event_date">
                   <label for="f-date">Event date</label>
                   <input id="f-date" name="event_date" type="date" required />
@@ -90,6 +115,22 @@
                 </div>
               </div>
               <div class="field-row">
+                <div class="field">
+                  <label for="f-attendance">Record attendance</label>
+                  <select id="f-attendance" name="attendance_enabled">
+                    <option value="true">Yes, ushers can check people in</option>
+                    <option value="false">No, do not track attendance</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="f-registration">Registration</label>
+                  <select id="f-registration" name="registration_enabled">
+                    <option value="true">Open: people can register</option>
+                    <option value="false">Off: no registration for this event</option>
+                  </select>
+                </div>
+              </div>
+              <div class="field-row">
                 <div class="field" data-field="registration_opens_at">
                   <label for="f-opens">Registration opens (optional)</label>
                   <input id="f-opens" name="registration_opens_at" type="datetime-local" />
@@ -120,30 +161,42 @@
 
           <dialog id="links-dialog" aria-labelledby="links-title">
             <div class="dialog-head">
-              <h2 id="links-title">Volunteer check-in links</h2>
+              <h2 id="links-title">Event links</h2>
               <button class="btn btn-outline btn-small" type="button" data-close>Close</button>
             </div>
             <div class="dialog-body">
-              <p class="muted">Share a link with each check-in volunteer. They need no account. Each link only works for this event and can be revoked at any time.</p>
               <div id="links-status" aria-live="polite"></div>
-              <form id="link-form" class="toolbar" novalidate>
-                <div class="field grow">
-                  <label for="l-label">Label</label>
-                  <input id="l-label" type="text" maxlength="60" placeholder="e.g. Main door" required />
-                </div>
-                <div class="field">
-                  <label for="l-days">Valid for</label>
-                  <select id="l-days">
-                    <option value="1">1 day</option>
-                    <option value="3" selected>3 days</option>
-                    <option value="7">7 days</option>
-                    <option value="30">30 days</option>
-                  </select>
-                </div>
-                <button class="btn btn-primary" type="submit">Create link</button>
-              </form>
-              <div id="new-link"></div>
-              <div id="links-list" class="table-wrap"></div>
+              <div id="links-stats" class="stats"></div>
+
+              <section class="link-section">
+                <h3>Registration link</h3>
+                <p class="muted">For visitors and anyone who needs to register for this event. Share it by WhatsApp, SMS or a poster. Registering does not mark anyone present.</p>
+                <div id="reg-link"></div>
+              </section>
+
+              <section class="link-section">
+                <h3>Attendance links for ushers</h3>
+                <p class="muted">Each usher opens a link on their phone, searches for a member or visitor and marks them present. They need no account. A link only works for this event and can be revoked at any time.</p>
+                <div id="new-link"></div>
+                <div id="links-list" class="table-wrap"></div>
+                <form id="link-form" class="toolbar" novalidate>
+                  <div class="field grow">
+                    <label for="l-label">Label</label>
+                    <input id="l-label" type="text" maxlength="60" placeholder="e.g. Main door" required />
+                  </div>
+                  <div class="field">
+                    <label for="l-days">Valid for</label>
+                    <select id="l-days">
+                      <option value="1">1 day</option>
+                      <option value="3" selected>3 days</option>
+                      <option value="7">7 days</option>
+                      <option value="30">30 days</option>
+                    </select>
+                  </div>
+                  <label class="check-inline"><input id="l-walkins" type="checkbox" checked /> Can register walk-ins</label>
+                  <button class="btn btn-primary" type="submit">Create link</button>
+                </form>
+              </section>
             </div>
           </dialog>
         </main>

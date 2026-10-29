@@ -26,12 +26,23 @@
             </div>
             <div class="row-actions">
               <a class="btn btn-outline" href="manage-events.html">← All events</a>
+              <a id="report-link" class="btn btn-outline" href="reports.html">Attendance report</a>
               <button id="thank-you" class="btn btn-secondary" type="button" aria-expanded="false" aria-controls="thank-panel">Thank-you email</button>
               <button id="export" class="btn btn-primary" type="button">Export CSV</button>
             </div>
           </div>
           <div id="status" aria-live="polite"></div>
           <div id="stats" class="stats"></div>
+
+          <section class="panel" id="mark-panel" aria-labelledby="mark-title">
+            <h2 id="mark-title">Mark someone present or correct a mistake</h2>
+            <p class="muted">Find any member or visitor by name or phone number, including people who did not register. Ushers can do this at the door with their attendance link; this is for corrections.</p>
+            <div class="field">
+              <label for="mark-search">Search by name or phone number</label>
+              <input id="mark-search" type="search" autocomplete="off" placeholder="At least 3 characters" />
+            </div>
+            <div id="mark-results" class="table-wrap"></div>
+          </section>
           <section class="panel hidden" id="thank-panel" aria-labelledby="thank-title">
             <h2 id="thank-title">Thank-you email to people who attended</h2>
             <p class="muted" id="thank-summary">Loading…</p>
