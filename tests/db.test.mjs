@@ -520,5 +520,355 @@ const bucket = (await db.query(`select public, file_size_limit, allowed_mime_typ
 check('poster bucket is private, 2 MB limit, images only',
   bucket.public === false && Number(bucket.file_size_limit) === 2097152 && bucket.allowed_mime_types.length === 3)
 
+// ===========================================================================
+console.log('\n8. Members, visitors, event links, ushers and reports')
+{ // SECTION8-BLOCK: its own scope, so names never clash with the sections above
+// ===========================================================================
+const managerId = '33333333-3333-3333-3333-333333333333'
+await db.exec(`
+  insert into auth.users (id, email) values ('${managerId}', 'manager@example.com');
+  insert into public.admin_roles (user_id, role) values ('${managerId}', 'manager');
+`)
+const A = (fn, args, ip) => as('authenticated', () => rpc(fn, args), { uid: adminId, ip })
+const M = (fn, args) => as('authenticated', () => rpc(fn, args), { uid: managerId })
+const U = (fn, args, ip = '10.8.8.8') => as('anon', () => rpc(fn, args), { ip })
+const newEvent = async (name, extra = {}) =>
+  (await db.query(
+    `insert into public.events (name, venue, event_date, start_time, end_time, capacity, status, visibility,
+        category, attendance_enabled, registration_enabled)
+     values ($1, 'Hall', $2, '00:00', '23:00', $3, $4, $5, $6, $7, $8) returning id`,
+    [name, extra.date || tomorrow, extra.capacity || 50, extra.status || 'published', extra.visibility || 'public',
+     extra.category || 'general', extra.attendance ?? true, extra.registration ?? true]
+  )).rows[0].id
+const peopleByPhone = async (phone) => (await db.query(`select count(*)::int n from public.people where phone = $1`, [phone])).rows[0].n
+
+// ---- 8.1 Members --------------------------------------------------------------------
+const m1 = await A('admin_create_member', { p_full_name: 'Esther Wambui Kamau', p_phone: '0702 499 324', p_email: 'esther@example.com', p_gender: 'female', p_ministry: 'Choir' })
+check('an administrator registers a new member', m1.ok === true && /^M-\d{5}$/.test(m1.label), JSON.stringify(m1))
+const dupPhone = await A('admin_create_member', { p_full_name: 'Someone Else', p_phone: '+254702499324' })
+check('+254702499324 and 0702499324 are the same phone number: duplicate refused',
+  dupPhone.error === 'duplicate_phone' && dupPhone.existing?.id === m1.id, JSON.stringify(dupPhone))
+check('the duplicate was not created', (await peopleByPhone('+254702499324')) === 1)
+const dupName = await A('admin_create_member', { p_full_name: 'Esther Kamau', p_phone: '0733 111 222' })
+check('a likely duplicate (similar name) is flagged for review, not created',
+  dupName.error === 'possible_duplicate' && dupName.matches?.length === 1 && dupName.matches[0].reasons.includes('similar_name'), JSON.stringify(dupName))
+const dupForced = await A('admin_create_member', { p_full_name: 'Esther Kamau', p_phone: '0733 111 222', p_force: true })
+check('an administrator can still create it after reviewing', dupForced.ok === true, JSON.stringify(dupForced))
+check('a one-word name does not match everyone with that first name',
+  (await A('admin_create_member', { p_full_name: 'Esther Njeri', p_phone: '0733 111 333' })).ok === true)
+check('invalid phone refused', (await A('admin_create_member', { p_full_name: 'No Phone', p_phone: '12' })).error === 'invalid_phone')
+check('optional contact details stay optional (no email, no alt phone)',
+  (await A('admin_create_member', { p_full_name: 'Plain Member', p_phone: '0733 111 444' })).ok === true)
+check('a manager cannot register members',
+  await denied(() => M('admin_create_member', { p_full_name: 'Not Allowed', p_phone: '0700 000 001' })))
+check('an ordinary signed-in user cannot register members',
+  await denied(() => as('authenticated', () => rpc('admin_create_member', { p_full_name: 'Not Allowed', p_phone: '0700 000 002' }), { uid: '99999999-9999-9999-9999-999999999999' })))
+check('the public cannot read the people directory directly',
+  await denied(() => as('anon', () => db.query('select * from public.people'))))
+const dirList = await A('admin_list_people', { p_kind: 'member', p_search: 'esther' })
+check('the directory searches by name', dirList.total === 3 && dirList.rows.some((r) => r.id === m1.id), JSON.stringify(dirList.total))
+check('the directory searches by phone in any format', (await A('admin_list_people', { p_kind: 'all', p_search: '0702499324' })).rows[0]?.id === m1.id)
+check('the directory searches by member number', (await A('admin_list_people', { p_kind: 'all', p_search: m1.label })).rows[0]?.id === m1.id)
+const upd = await A('admin_update_person', { p_id: m1.id, p_full_name: 'Esther Wambui Kamau', p_phone: '0702499324', p_email: 'esther.k@example.com', p_ministry: 'Choir and Ushers' })
+check('a member can be edited', upd.ok === true)
+check('editing to a phone that belongs to someone else is refused',
+  (await A('admin_update_person', { p_id: m1.id, p_full_name: 'Esther Wambui Kamau', p_phone: '0733 111 444' })).error === 'duplicate_phone')
+
+// ---- 8.2 Events and their two links --------------------------------------------------------
+const evPub = await newEvent('Sunday Service')
+const evPriv = await newEvent('Leaders Retreat', { visibility: 'private', category: 'leadership' })
+const evInt = await newEvent('Internal Prayer Meeting', { visibility: 'internal', category: 'prayer' })
+const listed = await as('anon', () => db.query('select id from public.public_events'))
+check('public events are listed', listed.rows.some((r) => r.id === evPub))
+check('private and internal events are never listed publicly',
+  !listed.rows.some((r) => r.id === evPriv || r.id === evInt))
+const links = await A('admin_event_links', { p_event_id: evPriv })
+check('both event links are generated automatically',
+  links.ok && links.registration_link?.token?.length === 64 && links.attendance_links.length === 1 && links.attendance_links[0].token?.length === 64, JSON.stringify(links).slice(0, 200))
+const regTok = links.registration_link.token
+const attTok = links.attendance_links[0].token
+check('links are long unpredictable tokens, different from each other', regTok !== attTok && /^[0-9a-f]{64}$/.test(regTok))
+check('the page for a registration link shows only that event',
+  (await U('registration_link_event', { p_token: regTok })).event?.name === 'Leaders Retreat')
+check('a private event cannot be registered for by its id (no public door)',
+  (await reg(evPriv, 80, {}, { ip: '10.8.1.1' })).error === 'event_unavailable')
+const viaLink = await U('register_via_link', { p_token: regTok, p_full_name: 'Visiting Vera', p_email: '', p_phone: '0744 000 111', p_church_name: 'Grace Chapel', p_consent: true }, '10.8.1.2')
+check('a first-time visitor registers through the registration link', viaLink.ok === true, JSON.stringify(viaLink))
+const vera = (await db.query(`select * from public.people where phone = '+254744000111'`)).rows[0]
+check('a visitor record is created (not a member)', vera?.kind === 'visitor' && /^V-\d{5}$/.test(`V-${String(vera.person_no).padStart(5, '0')}`))
+check('registering does NOT count as attendance',
+  (await db.query(`select count(*)::int n from public.attendance where person_id = $1`, [vera.id])).rows[0].n === 0)
+check('a registration link cannot be used for attendance',
+  (await U('volunteer_search_people', { p_token: regTok, p_query: 'Vera' })).error === 'invalid_access')
+check('an attendance link cannot be used to register',
+  (await U('register_via_link', { p_token: attTok, p_full_name: 'Sneaky One', p_email: '', p_phone: '0744 000 112', p_church_name: 'X Church', p_consent: true }, '10.8.1.3')).error === 'invalid_link')
+check('an invalid registration link is refused', (await U('registration_link_event', { p_token: 'x'.repeat(40) })).error === 'invalid_link')
+check('consent is still required through the link',
+  (await U('register_via_link', { p_token: regTok, p_full_name: 'No Consent', p_email: '', p_phone: '0744 000 113', p_church_name: 'X Church', p_consent: false }, '10.8.1.4')).error === 'consent_required')
+
+// returning visitor: same person, a second event, the phone written differently
+const regTok2 = (await A('admin_event_links', { p_event_id: evPub })).registration_link.token
+const again = await U('register_via_link', { p_token: regTok2, p_full_name: 'Vera Visiting', p_email: '', p_phone: '+254744000111', p_church_name: 'Grace Chapel', p_consent: true }, '10.8.1.5')
+check('a returning visitor registers for another event', again.ok === true, JSON.stringify(again))
+check('no second profile is created for the same phone', (await peopleByPhone('+254744000111')) === 1)
+check('both registrations belong to the one visitor',
+  (await db.query(`select count(distinct person_id)::int n, count(*)::int c from public.registrations where phone = '+254744000111'`)).rows[0].n === 1)
+const veraAfter = (await db.query(`select needs_review from public.people where id = $1`, [vera.id])).rows[0]
+check('a similar name is accepted without any flag', veraAfter.needs_review === false)
+const diffName = await U('register_via_link', { p_token: regTok2, p_full_name: 'Totally Different Person', p_email: '', p_phone: '0744 000 114', p_church_name: 'X Church', p_consent: true }, '10.8.1.6')
+await U('register_via_link', { p_token: (await A('admin_event_links', { p_event_id: evInt })).registration_link.token, p_full_name: 'Another Name Entirely', p_email: '', p_phone: '0744000114', p_church_name: 'X Church', p_consent: true }, '10.8.1.7')
+check('the same phone with a very different name is flagged for review, not merged',
+  (await db.query(`select needs_review, count(*) over () c from public.people where phone = '+254744000114'`)).rows[0].needs_review === true
+  && (await peopleByPhone('+254744000114')) === 1)
+check('flagged people can be listed for review', (await A('admin_list_people', { p_kind: 'all', p_review: true })).rows.some((r) => r.phone === '+254744000114'))
+
+// link management
+const regen = await A('admin_registration_link', { p_event_id: evPriv, p_action: 'regenerate' })
+check('regenerating the registration link works', regen.ok && regen.token && regen.token !== regTok)
+check('the old registration link stops working',
+  (await U('registration_link_event', { p_token: regTok })).error === 'invalid_link' || (await U('registration_link_event', { p_token: regTok })).error === 'revoked')
+check('the new registration link works', (await U('registration_link_event', { p_token: regen.token })).ok === true)
+await A('admin_registration_link', { p_event_id: evPriv, p_action: 'disable' })
+check('a disabled registration link is refused', (await U('registration_link_event', { p_token: regen.token })).ok === false)
+check('a link can be created again after disabling', (await A('admin_registration_link', { p_event_id: evPriv, p_action: 'create' })).ok === true)
+const evNoReg = await newEvent('Registration Closed Meeting', { registration: false })
+const tokNoReg = (await A('admin_event_links', { p_event_id: evNoReg })).registration_link.token
+check('registration can be switched off for an event',
+  (await U('register_via_link', { p_token: tokNoReg, p_full_name: 'Late Larry', p_email: '', p_phone: '0744 000 115', p_church_name: 'X Church', p_consent: true }, '10.8.1.8')).error === 'registration_disabled')
+check('the link page says registration is unavailable', (await U('registration_link_event', { p_token: tokNoReg })).event?.registration_state === 'unavailable')
+const expLink = await A('admin_registration_link', { p_event_id: evInt, p_action: 'regenerate', p_expires_at: new Date(Date.now() + 3600000).toISOString() })
+await db.query(`update public.volunteer_access set expires_at = now() - interval '1 minute' where kind = 'registration' and event_id = $1 and revoked_at is null`, [evInt])
+check('an expired registration link is refused', (await U('registration_link_event', { p_token: expLink.token })).error === 'expired')
+check('managers cannot manage links', await denied(() => M('admin_event_links', { p_event_id: evPub })))
+
+// ---- 8.3 Ushers: search and check in -----------------------------------------------------
+const linksPub = await A('admin_event_links', { p_event_id: evPub })
+const ushTok = linksPub.attendance_links[0].token
+const sTooShort = await U('volunteer_search_people', { p_token: ushTok, p_query: 'es' })
+check('search needs at least 3 characters', sTooShort.error === 'query_too_short')
+const byName = await U('volunteer_search_people', { p_token: ushTok, p_query: 'wambui' })
+check('an usher finds a member by name', byName.ok && byName.results.some((r) => r.person_id === m1.id && r.kind === 'member'), JSON.stringify(byName))
+const byPhone = await U('volunteer_search_people', { p_token: ushTok, p_query: '0702 499 324' })
+check('an usher finds a member by phone number', byPhone.results.some((r) => r.person_id === m1.id))
+check('the full phone number is never shown to ushers',
+  !JSON.stringify(byName).includes('702499324') && byName.results[0].phone_hint.endsWith('324'))
+const veraFound = await U('volunteer_search_people', { p_token: ushTok, p_query: 'vera' })
+check('registered visitors are found too, marked as registered', veraFound.results.some((r) => r.person_id === vera.id && r.kind === 'visitor' && r.registered === true))
+const ci1 = await U('volunteer_check_in_person', { p_token: ushTok, p_person_id: m1.id })
+check('an usher marks a member present', ci1.ok && ci1.result === 'checked_in' && ci1.kind === 'member', JSON.stringify(ci1))
+const ci2 = await U('volunteer_check_in_person', { p_token: ushTok, p_person_id: m1.id })
+check('the same person cannot be counted twice for one event', ci2.ok && ci2.result === 'already_checked_in')
+check('exactly one attendance record exists',
+  (await db.query(`select count(*)::int n from public.attendance where event_id = $1 and person_id = $2`, [evPub, m1.id])).rows[0].n === 1)
+const ci3 = await U('volunteer_check_in_person', { p_token: ushTok, p_person_id: vera.id })
+check('an usher checks in a registered visitor', ci3.ok && ci3.result === 'checked_in' && ci3.kind === 'visitor')
+const veraAtt = (await db.query(`select registration_id, classification from public.attendance where event_id = $1 and person_id = $2`, [evPub, vera.id])).rows[0]
+check('the visitor attendance is linked to their registration and classed as a visitor',
+  veraAtt.registration_id !== null && veraAtt.classification === 'visitor')
+check('the event page counts show members and visitors separately',
+  await (async () => { const e = await U('volunteer_event', { p_token: ushTok }); return e.members_present === 1 && e.visitors_present === 1 && e.checked_in === 2 && e.registered === 2 })())
+
+// walk-ins
+const w1 = await U('volunteer_register_walkin', { p_token: ushTok, p_full_name: 'Walk In Wanjiru', p_phone: '0755 666 777', p_church_name: '', p_consent: true })
+check('an usher registers and checks in a walk-in visitor in one step', w1.ok && w1.result === 'checked_in' && w1.kind === 'visitor' && w1.matched_existing === false, JSON.stringify(w1))
+const wRow = (await db.query(`select a.registration_id, a.classification, a.method, p.kind from public.attendance a join public.people p on p.id = a.person_id where p.phone = '+254755666777'`)).rows[0]
+check('the walk-in has a visitor profile and an attendance record', wRow && wRow.kind === 'visitor' && wRow.classification === 'visitor' && wRow.method === 'walkin' && wRow.registration_id === null)
+const w2 = await U('volunteer_register_walkin', { p_token: ushTok, p_full_name: 'Walk In Wanjiru', p_phone: '+254755666777', p_consent: true })
+check('registering the same walk-in again does not duplicate them or their attendance',
+  w2.result === 'already_checked_in' && w2.matched_existing === true && (await peopleByPhone('+254755666777')) === 1)
+const w3 = await U('volunteer_register_walkin', { p_token: ushTok, p_full_name: 'Esther Kamau', p_phone: '0702 499 324', p_consent: true })
+check('a walk-in who is already a member is found, not duplicated', w3.matched_existing === true && w3.kind === 'member')
+check('a walk-in needs consent', (await U('volunteer_register_walkin', { p_token: ushTok, p_full_name: 'No Consent Nora', p_phone: '0755 666 778', p_consent: false })).error === 'consent_required')
+check('a walk-in needs a valid phone', (await U('volunteer_register_walkin', { p_token: ushTok, p_full_name: 'Bad Phone', p_phone: '12', p_consent: true })).error === 'invalid_phone')
+check('a walk-in needs a valid email if one is given', (await U('volunteer_register_walkin', { p_token: ushTok, p_full_name: 'Bad Mail', p_phone: '0755 666 779', p_email: 'nope', p_consent: true })).error === 'invalid_email')
+const noWalkTok = (await A('admin_create_volunteer_link', { p_event_id: evPub, p_label: 'Door without walk-ins', p_expires_at: new Date(Date.now() + 86400000).toISOString(), p_allow_walkins: false })).token
+check('a link without walk-in permission cannot register new visitors',
+  (await U('volunteer_register_walkin', { p_token: noWalkTok, p_full_name: 'Not Allowed Ned', p_phone: '0755 666 780', p_consent: true })).error === 'walkins_not_allowed')
+check('...but it can still check people in', (await U('volunteer_check_in_person', { p_token: noWalkTok, p_person_id: m1.id })).result === 'already_checked_in')
+
+// link states
+const revokeTarget = await A('admin_create_volunteer_link', { p_event_id: evPub, p_label: 'To revoke', p_expires_at: new Date(Date.now() + 86400000).toISOString() })
+await A('admin_revoke_volunteer_link', { p_access_id: revokeTarget.id })
+check('a revoked attendance link stops working', (await U('volunteer_search_people', { p_token: revokeTarget.token, p_query: 'esther' })).error === 'revoked')
+const expTarget = await A('admin_create_volunteer_link', { p_event_id: evPub, p_label: 'To expire', p_expires_at: new Date(Date.now() + 86400000).toISOString() })
+await db.query(`update public.volunteer_access set expires_at = now() - interval '1 minute' where id = $1`, [expTarget.id])
+check('an expired attendance link stops working', (await U('volunteer_search_people', { p_token: expTarget.token, p_query: 'esther' })).error === 'expired')
+check('a made-up token is refused', (await U('volunteer_search_people', { p_token: 'y'.repeat(40), p_query: 'esther' })).error === 'invalid_access')
+const evNoAtt = await newEvent('No Attendance Event', { attendance: false })
+const noAttTok = (await A('admin_event_links', { p_event_id: evNoAtt })).attendance_links[0].token
+check('attendance can be switched off for an event',
+  (await U('volunteer_check_in_person', { p_token: noAttTok, p_person_id: m1.id })).error === 'attendance_disabled')
+const evFar2 = await newEvent('Next Month Meeting', { date: daysAhead(40) })
+const farTok = (await A('admin_event_links', { p_event_id: evFar2 })).attendance_links[0].token
+check('check-in outside its window is refused with a clear message',
+  (await U('volunteer_check_in_person', { p_token: farTok, p_person_id: m1.id })).error === 'outside_window')
+const inactive = await A('admin_create_member', { p_full_name: 'Retired Ruth Muthoni', p_phone: '0733 999 000' })
+await A('admin_set_person_status', { p_id: inactive.id, p_status: 'inactive' })
+check('inactive members no longer appear in usher search',
+  !(await U('volunteer_search_people', { p_token: ushTok, p_query: 'retired' })).results.length)
+check('an inactive member cannot be checked in', (await U('volunteer_check_in_person', { p_token: ushTok, p_person_id: inactive.id })).error === 'not_found')
+await A('admin_set_person_status', { p_id: inactive.id, p_status: 'active' })
+check('an inactive member can be activated again', (await U('volunteer_search_people', { p_token: ushTok, p_query: 'retired' })).results.length === 1)
+
+// ---- 8.4 Event report, correction and conversion ------------------------------------------------
+const rep1 = await A('admin_event_attendance_report', { p_event_id: evPub })
+check('the event report separates attended members from attended visitors',
+  rep1.ok && rep1.attended_members.length === 1 && rep1.attended_visitors.length === 2 && rep1.totals.unique_attendees === 3, JSON.stringify(rep1.totals))
+check('the report lists the member under members and visitors under visitors',
+  rep1.attended_members[0].person_id === m1.id && rep1.attended_visitors.some((v) => v.person_id === vera.id))
+check('attendance without prior registration is counted separately', rep1.totals.attended_without_registering >= 2)
+const regOnlyEv = await newEvent('Registered But Absent')
+const absTok = (await A('admin_event_links', { p_event_id: regOnlyEv })).registration_link.token
+await U('register_via_link', { p_token: absTok, p_full_name: 'Absent Abel', p_email: '', p_phone: '0766 000 001', p_church_name: 'X Church', p_consent: true }, '10.8.2.1')
+const rep2 = await A('admin_event_attendance_report', { p_event_id: regOnlyEv })
+check('registered visitors who did not attend are listed separately',
+  rep2.registered_visitors_not_attended.length === 1 && rep2.totals.attended_visitors === 0 && rep2.totals.attendance_percentage === 0)
+check('members who did not register are not treated as absent', rep2.registered_members_not_attended.length === 0 && rep2.totals.registered_members === 0)
+const repMgr = await M('admin_event_attendance_report', { p_event_id: evPub })
+check('a manager can see the event report with phone numbers masked',
+  repMgr.ok && repMgr.full_phone_numbers === false && !JSON.stringify(repMgr).includes('702499324'))
+check('an administrator sees full phone numbers', rep1.full_phone_numbers === true && JSON.stringify(rep1).includes('+254702499324'))
+check('an ordinary user cannot read the report',
+  await denied(() => as('authenticated', () => rpc('admin_event_attendance_report', { p_event_id: evPub }), { uid: '99999999-9999-9999-9999-999999999999' })))
+
+// manual correction (managers are allowed)
+const corr = await M('admin_set_person_attendance', { p_event_id: evPub, p_person_id: vera.id, p_present: false, p_reason: 'Marked by mistake' })
+check('a manager can correct attendance', corr.ok && corr.result === 'removed')
+const kept = (await db.query(`select action, reason, classification, original_checked_in_by from public.attendance_corrections where person_id = $1 and event_id = $2`, [vera.id, evPub])).rows
+check('the removed record is kept in the correction history', kept.length === 1 && kept[0].action === 'removed' && kept[0].reason === 'Marked by mistake' && kept[0].classification === 'visitor')
+check('the person is no longer counted', (await db.query(`select count(*)::int n from public.attendance where event_id = $1 and person_id = $2`, [evPub, vera.id])).rows[0].n === 0)
+await M('admin_set_person_attendance', { p_event_id: evPub, p_person_id: vera.id, p_present: true, p_reason: 'Re-added' })
+check('attendance can be restored, and the history keeps both steps',
+  (await db.query(`select count(*)::int n from public.attendance_corrections where person_id = $1`, [vera.id])).rows[0].n === 2)
+check('an ordinary user cannot change attendance',
+  await denied(() => as('authenticated', () => rpc('admin_set_person_attendance', { p_event_id: evPub, p_person_id: vera.id, p_present: false }), { uid: '99999999-9999-9999-9999-999999999999' })))
+
+// visitor -> member
+const veraBefore = await A('admin_get_person', { p_id: vera.id })
+check('a visitor profile shows registrations and attendance history', veraBefore.registrations.length === 2 && veraBefore.history.length === 1)
+check('a manager cannot convert a visitor', await denied(() => M('admin_convert_visitor', { p_id: vera.id, p_full_name: 'Vera Visiting', p_phone: '0744000111' })))
+const conv = await A('admin_convert_visitor', { p_id: vera.id, p_full_name: 'Vera Visiting', p_phone: '0744 000 111', p_email: 'vera@example.com', p_ministry: 'Hospitality' })
+check('an administrator converts a visitor into a member', conv.ok === true && /^M-/.test(conv.label), JSON.stringify(conv))
+check('conversion keeps the same person (no second profile)', conv.id === vera.id && (await peopleByPhone('+254744000111')) === 1)
+check('conversion keeps registrations and attendance', conv.registrations_kept === 2 && conv.attendance_kept === 1)
+check('the person now appears as a member',
+  (await A('admin_list_people', { p_kind: 'member', p_search: 'vera' })).rows.some((r) => r.id === vera.id))
+check('and no longer in the visitors list', !(await A('admin_list_people', { p_kind: 'visitor', p_search: 'vera' })).rows.some((r) => r.id === vera.id))
+const repOld = await A('admin_event_attendance_report', { p_event_id: evPub })
+check('the old event still classes them as a visitor (history is preserved)',
+  repOld.attended_visitors.some((v) => v.person_id === vera.id && v.now_member === true) && !repOld.attended_members.some((v) => v.person_id === vera.id))
+const evAfter = await newEvent('After Conversion Service')
+const tokAfter = (await A('admin_event_links', { p_event_id: evAfter })).attendance_links[0].token
+const afterSearch = await U('volunteer_search_people', { p_token: tokAfter, p_query: 'vera' })
+check('future searches find them as a member', afterSearch.results[0]?.kind === 'member')
+await U('volunteer_check_in_person', { p_token: tokAfter, p_person_id: vera.id })
+check('new attendance is recorded as a member',
+  (await db.query(`select classification from public.attendance where event_id = $1 and person_id = $2`, [evAfter, vera.id])).rows[0].classification === 'member')
+check('a member cannot be converted again', (await A('admin_convert_visitor', { p_id: vera.id, p_full_name: 'Vera Visiting', p_phone: '0744000111' })).error === 'already_member')
+const w4 = (await db.query(`select id from public.people where phone = '+254755666777'`)).rows[0].id
+check('conversion cannot take a phone number that belongs to someone else',
+  (await A('admin_convert_visitor', { p_id: w4, p_full_name: 'Walk In Wanjiru', p_phone: '0702499324' })).error === 'duplicate_phone')
+check('the conversion is recorded in the audit log',
+  (await db.query(`select count(*)::int n from public.audit_log where action = 'visitor_converted'`)).rows[0].n === 1)
+const profile = await A('admin_get_person', { p_id: vera.id })
+check('the member profile shows attendance history and the year total',
+  profile.history.length === 2 && profile.year_total >= 2 && profile.history.some((h) => h.classification === 'visitor') && profile.history.some((h) => h.classification === 'member'))
+const lapsed = await A('admin_lapsed_members', { p_days: 30 })
+check('members who have not attended recently can be listed',
+  lapsed.ok && lapsed.rows.some((r) => r.full_name === 'Plain Member') && !lapsed.rows.some((r) => r.person_id === m1.id))
+const none = await A('admin_list_people', { p_kind: 'member', p_attended: 'none', p_from: '2000-01-01', p_to: '2100-01-01' })
+check('members with no attendance in a period can be filtered', none.rows.some((r) => r.full_name === 'Plain Member') && !none.rows.some((r) => r.id === m1.id))
+check('repeat visitors can be found',
+  (await A('admin_list_people', { p_kind: 'visitor', p_min_attended: 1 })).rows.every((r) => r.attended_total >= 1))
+
+// ---- 8.5 Annual ranking -----------------------------------------------------------------------------
+const yr = 2019
+const mkEv = async (name, date, extra = {}) => (await db.query(
+  `insert into public.events (name, venue, event_date, start_time, capacity, status, category, attendance_enabled)
+   values ($1, 'Hall', $2, '10:00', 50, $3, $4, $5) returning id`,
+  [name, date, extra.status || 'published', extra.category || 'service', extra.attendance ?? true])).rows[0].id
+const y1 = await mkEv('Y Jan Service', '2019-01-06')
+const y2 = await mkEv('Y Feb Prayer', '2019-02-10', { category: 'prayer' })
+const y3 = await mkEv('Y Mar Service', '2019-03-10')
+const y4 = await mkEv('Y Apr Training', '2019-04-14', { category: 'training', status: 'completed' })
+const yCancelled = await mkEv('Y Cancelled', '2019-05-05', { status: 'cancelled' })
+const yDraft = await mkEv('Y Draft', '2019-05-12', { status: 'draft' })
+const yNoAtt = await mkEv('Y No Tracking', '2019-06-02', { attendance: false })
+const yNext = await mkEv('Y Next Year', '2020-01-05')
+const mk = async (name, phone, kind = 'member') => (await db.query(
+  `insert into public.people (kind, full_name, phone, status) values ($1, $2, $3, 'active') returning id`, [kind, name, phone])).rows[0].id
+const rA = await mk('Rank Alpha', '+254790000001')
+const rB = await mk('Rank Bravo', '+254790000002')
+const rC = await mk('Rank Charlie', '+254790000003')
+const rD = await mk('Rank Delta', '+254790000004')
+const rE = await mk('Rank Echo', '+254790000005')
+const rV = await mk('Rank Visitor', '+254790000006', 'visitor')
+const attend = (ev, p) => db.query(`insert into public.attendance (event_id, person_id, method, checked_in_by) values ($1, $2, 'admin', 'test') on conflict do nothing`, [ev, p])
+for (const ev of [y1, y2, y3, yCancelled, yDraft, yNoAtt, yNext]) await attend(ev, rA)  // A: 3 counted meetings
+for (const ev of [y1, y4]) await attend(ev, rB)                                         // B: 2
+for (const ev of [y2, y3]) await attend(ev, rC)                                         // C: 2 (tie with B)
+await attend(y1, rD)                                                                    // D: 1
+await attend(y1, rD)                                                                    // duplicate attempt
+await attend(y1, rV); await attend(y2, rV)                                              // a visitor: 2
+check('duplicate check-in attempts leave one record', (await db.query(`select count(*)::int n from public.attendance where event_id = $1 and person_id = $2`, [y1, rD])).rows[0].n === 1)
+const rk = await A('admin_annual_attendance', { p_year: yr })
+const rankOf = (res, name) => res.ranking.find((r) => r.full_name === name)
+check('members are ranked by distinct meetings attended in the year',
+  rankOf(rk, 'Rank Alpha').meetings_attended === 3 && rankOf(rk, 'Rank Bravo').meetings_attended === 2 && rankOf(rk, 'Rank Delta').meetings_attended === 1, JSON.stringify(rk.ranking.filter((r) => r.full_name.startsWith('Rank '))))
+check('cancelled, draft, no-tracking and other-year events do not count', rankOf(rk, 'Rank Alpha').meetings_attended === 3)
+check('ranks run highest to lowest with ties sharing a rank',
+  rankOf(rk, 'Rank Alpha').rank < rankOf(rk, 'Rank Bravo').rank && rankOf(rk, 'Rank Bravo').rank === rankOf(rk, 'Rank Charlie').rank
+  && rankOf(rk, 'Rank Delta').rank === rankOf(rk, 'Rank Bravo').rank + 2)
+check('zero-attendance members are listed when requested and ranked last',
+  rankOf(rk, 'Rank Echo')?.meetings_attended === 0 && rankOf(rk, 'Rank Echo').rank > rankOf(rk, 'Rank Delta').rank)
+const rkNoZero = await A('admin_annual_attendance', { p_year: yr, p_include_zero: false })
+check('zero-attendance members can be left out', !rankOf(rkNoZero, 'Rank Echo') && rkNoZero.ranking.every((r) => r.meetings_attended > 0))
+check('visitors are not mixed into the member ranking', !rankOf(rk, 'Rank Visitor'))
+const rkV = await A('admin_annual_attendance', { p_year: yr, p_scope: 'visitors' })
+check('visitors have their own ranking', rankOf(rkV, 'Rank Visitor')?.meetings_attended === 2 && !rankOf(rkV, 'Rank Alpha'))
+const rkAll = await A('admin_annual_attendance', { p_year: yr, p_scope: 'all' })
+check('an all-attendees view includes both', !!rankOf(rkAll, 'Rank Visitor') && !!rankOf(rkAll, 'Rank Alpha'))
+const rkPrayer = await A('admin_annual_attendance', { p_year: yr, p_category: 'prayer' })
+check('the ranking can be filtered by event category', rankOf(rkPrayer, 'Rank Alpha')?.meetings_attended === 1 && rankOf(rkPrayer, 'Rank Charlie')?.meetings_attended === 1 && !rankOf(rkPrayer, 'Rank Bravo')?.meetings_attended)
+check('the year is taken from the event date', (await A('admin_annual_attendance', { p_year: 2020 })).ranking.find((r) => r.full_name === 'Rank Alpha')?.meetings_attended === 1)
+const activeMembers = (await db.query(`select count(*)::int n from public.people where kind = 'member' and status = 'active'`)).rows[0].n
+check('the annual summary is computed from real records',
+  rk.summary.meetings_held === 4 && rk.summary.active_members === activeMembers
+  && rk.summary.member_attendance_records === 8 && rk.summary.members_attended_any === 4
+  && rk.summary.members_attended_none === activeMembers - 4 && rk.summary.visitors_attended_any === 1, JSON.stringify(rk.summary))
+check('participation rate = member attendances / (meetings x active members)',
+  Math.abs(rk.summary.participation_rate - Math.round(1000 * 8 / (4 * activeMembers)) / 10) < 0.11, String(rk.summary.participation_rate))
+check('attendance by month and category are reported',
+  rk.monthly.length === 12 && rk.monthly[0].meetings === 1 && rk.monthly[0].member_attendance >= 3 && rk.categories.some((c) => c.category === 'prayer'))
+check('the previous year is available for comparison', rk.previous.year === 2018 && rk.previous.meetings === 0)
+check('rankings are administrator-only', await denied(() => M('admin_annual_attendance', { p_year: yr })))
+check('rankings are not public', await denied(() => as('anon', () => rpc('admin_annual_attendance', { p_year: yr }))))
+check('an invalid year is refused', (await A('admin_annual_attendance', { p_year: 1 })).error === 'invalid_year')
+
+// ---- 8.6 Existing behaviour keeps working -----------------------------------------------------------
+const evQr = await newEvent('QR Regression Event')
+const qrTok = (await A('admin_event_links', { p_event_id: evQr })).attendance_links[0].token
+const qrReg = await reg(evQr, 90, {}, { ip: '10.8.3.1' })
+const qrCi = await U('volunteer_check_in_qr', { p_token: qrTok, p_code: qrReg.qr_token })
+check('QR check-in still works and records the person', qrCi.ok && qrCi.result === 'checked_in')
+check('QR attendance carries the person and classification',
+  (await db.query(`select person_id is not null as p, classification from public.attendance where event_id = $1`, [evQr])).rows[0].classification === 'visitor')
+const qrList = await M('admin_list_registrations', { p_event_id: evQr })
+check('managers can view an event\'s registrations, with the person classification', qrList.ok && qrList.rows[0].classification === 'visitor' && qrList.rows[0].checked_in_at)
+check('managers cannot cancel registrations', await denied(() => M('admin_cancel_registration', { p_registration_id: qrList.rows[0].id })))
+check('managers cannot create events',
+  await denied(() => as('authenticated', () => db.query(`insert into public.events (name, venue, event_date, start_time, capacity) values ('Mgr Event', 'x', '2030-01-01', '10:00', 5)`), { uid: managerId })))
+check('managers can read events', (await as('authenticated', () => db.query('select count(*)::int n from public.events'), { uid: managerId })).rows[0].n > 0)
+const mgrRole = await as('authenticated', () => rpc('my_role', {}), { uid: managerId })
+check('my_role reports the signed-in role', mgrRole === 'manager' && (await as('authenticated', () => rpc('my_role', {}), { uid: adminId })) === 'admin')
+check('removing attendance by cancelling a registration keeps a copy',
+  await (async () => { await A('admin_cancel_registration', { p_registration_id: qrList.rows[0].id });
+    return (await db.query(`select count(*)::int n from public.attendance_corrections where event_id = $1 and action = 'removed'`, [evQr])).rows[0].n === 1 })())
+const overview2 = await A('admin_reports_overview', {})
+check('the reports overview carries member and visitor attendance', overview2.events.some((e) => e.members_attended >= 1 && e.unique_attendees >= 1))
+const stats2 = await A('admin_dashboard_stats', {})
+check('dashboard stats include members and visitors', stats2.total_members >= 5 && stats2.total_visitors >= 1)
+
+}
 console.log(`\n${passed} passed, ${failed} failed`)
 process.exit(failed ? 1 : 0)

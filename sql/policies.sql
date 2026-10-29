@@ -27,6 +27,8 @@ alter table public.registrations enable row level security;
 alter table public.attendance enable row level security;
 alter table public.volunteer_access enable row level security;
 alter table public.audit_log enable row level security;
+alter table public.people enable row level security;
+alter table public.attendance_corrections enable row level security;
 alter table private.rate_limits enable row level security;
 
 -- 3. Policies ----------------------------------------------------------------
@@ -45,7 +47,7 @@ drop policy if exists "Admins read events" on public.events;
 create policy "Admins read events"
   on public.events for select
   to authenticated
-  using (public.is_admin());
+  using (public.is_staff());
 
 drop policy if exists "Admins create events" on public.events;
 create policy "Admins create events"
@@ -66,20 +68,34 @@ drop policy if exists "Admins read registrations" on public.registrations;
 create policy "Admins read registrations"
   on public.registrations for select
   to authenticated
-  using (public.is_admin());
+  using (public.is_staff());
 
 -- attendance: administrators may read; writes happen only in functions.
 drop policy if exists "Admins read attendance" on public.attendance;
 create policy "Admins read attendance"
   on public.attendance for select
   to authenticated
-  using (public.is_admin());
+  using (public.is_staff());
 
 -- volunteer_access: administrators may read link metadata (never the hash,
 -- see the column grants below).
 drop policy if exists "Admins read volunteer links" on public.volunteer_access;
 create policy "Admins read volunteer links"
   on public.volunteer_access for select
+  to authenticated
+  using (public.is_admin());
+
+-- people and attendance_corrections: administrators read; every change goes through
+-- the admin_* functions (the directory is never opened to the public API).
+drop policy if exists "Admins read people" on public.people;
+create policy "Admins read people"
+  on public.people for select
+  to authenticated
+  using (public.is_admin());
+
+drop policy if exists "Admins read attendance corrections" on public.attendance_corrections;
+create policy "Admins read attendance corrections"
+  on public.attendance_corrections for select
   to authenticated
   using (public.is_admin());
 
@@ -95,10 +111,12 @@ grant select on public.admin_roles to authenticated;
 
 grant select on public.events to authenticated;
 grant insert (name, description, venue, event_date, start_time, end_date, end_time, capacity,
+              category, visibility, attendance_enabled, registration_enabled,
               show_remaining, poster_path, registration_opens_at,
               registration_closes_at, status)
   on public.events to authenticated;
 grant update (name, description, venue, event_date, start_time, end_date, end_time, capacity,
+              category, visibility, attendance_enabled, registration_enabled,
               show_remaining, poster_path, registration_opens_at,
               registration_closes_at, status)
   on public.events to authenticated;
@@ -115,6 +133,8 @@ grant select on public.public_events to anon, authenticated;
 -- 5. Function privileges -------------------------------------------------------
 -- Needed by RLS policy expressions and the admin UI.
 grant execute on function public.is_admin() to authenticated;
+grant execute on function public.is_staff() to authenticated;
+grant execute on function public.my_role() to authenticated;
 
 -- Anonymous workflows: registration, re-opening a confirmation, volunteer check-in.
 grant execute on function public.register_participant(uuid, text, text, text, text, boolean) to anon, authenticated;
@@ -123,17 +143,35 @@ grant execute on function public.volunteer_event(text) to anon, authenticated;
 grant execute on function public.volunteer_search(text, text) to anon, authenticated;
 grant execute on function public.volunteer_check_in(text, uuid) to anon, authenticated;
 grant execute on function public.volunteer_check_in_qr(text, text) to anon, authenticated;
+grant execute on function public.volunteer_search_people(text, text) to anon, authenticated;
+grant execute on function public.volunteer_check_in_person(text, uuid) to anon, authenticated;
+grant execute on function public.volunteer_register_walkin(text, text, text, text, text, boolean) to anon, authenticated;
+grant execute on function public.registration_link_event(text) to anon, authenticated;
+grant execute on function public.register_via_link(text, text, text, text, text, boolean) to anon, authenticated;
 
 -- Administrator functions (each also verifies admin_roles itself).
-grant execute on function public.admin_create_volunteer_link(uuid, text, timestamptz) to authenticated;
+grant execute on function public.admin_create_volunteer_link(uuid, text, timestamptz, boolean) to authenticated;
 grant execute on function public.admin_revoke_volunteer_link(uuid) to authenticated;
 grant execute on function public.admin_regenerate_volunteer_link(uuid, timestamptz) to authenticated;
-grant execute on function public.admin_set_attendance(uuid, boolean) to authenticated;
+grant execute on function public.admin_set_attendance(uuid, boolean, text) to authenticated;
 grant execute on function public.admin_cancel_registration(uuid) to authenticated;
 grant execute on function public.admin_list_registrations(uuid, text, text, text, integer, integer) to authenticated;
 grant execute on function public.admin_event_report(uuid) to authenticated;
 grant execute on function public.admin_reports_overview() to authenticated;
 grant execute on function public.admin_dashboard_stats() to authenticated;
+grant execute on function public.admin_event_links(uuid) to authenticated;
+grant execute on function public.admin_registration_link(uuid, text, timestamptz) to authenticated;
+grant execute on function public.admin_set_person_attendance(uuid, uuid, boolean, text) to authenticated;
+grant execute on function public.admin_find_duplicates(text, text, text, text, uuid) to authenticated;
+grant execute on function public.admin_create_member(text, text, text, text, text, date, text, text, text, boolean) to authenticated;
+grant execute on function public.admin_update_person(uuid, text, text, text, text, text, date, text, text, text, boolean) to authenticated;
+grant execute on function public.admin_set_person_status(uuid, text) to authenticated;
+grant execute on function public.admin_convert_visitor(uuid, text, text, text, text, text, date, text, text, text) to authenticated;
+grant execute on function public.admin_list_people(text, text, text, text, date, date, text, integer, integer, boolean, integer) to authenticated;
+grant execute on function public.admin_get_person(uuid, integer) to authenticated;
+grant execute on function public.admin_event_attendance_report(uuid) to authenticated;
+grant execute on function public.admin_annual_attendance(integer, text, boolean, text) to authenticated;
+grant execute on function public.admin_lapsed_members(integer) to authenticated;
 
 -- 6. Storage: event posters -------------------------------------------------------
 -- The bucket is PRIVATE and capped at 2 MB per image. Anonymous visitors are

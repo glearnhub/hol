@@ -217,3 +217,192 @@ drop trigger if exists events_guard_capacity on public.events;
 create trigger events_guard_capacity
   before update of capacity on public.events
   for each row execute function private.guard_event_capacity();
+
+-- =============================================================================
+-- Members, visitors and attendance (enhancement)
+-- Everything below is idempotent and upgrades an existing database in place.
+-- =============================================================================
+
+-- ---------------------------------------------------------------------------
+-- Roles: administrators do everything; managers handle attendance and reports.
+-- ---------------------------------------------------------------------------
+alter table public.admin_roles drop constraint if exists admin_roles_role_check;
+alter table public.admin_roles
+  add constraint admin_roles_role_check check (role in ('admin', 'manager'));
+
+-- ---------------------------------------------------------------------------
+-- events: category, visibility, per-event switches, and a "completed" status.
+--   visibility: public   = listed on the website and open to the public
+--               private  = never listed; reached only through its secret links
+--               internal = like private, for meetings among leaders/members
+-- ---------------------------------------------------------------------------
+alter table public.events add column if not exists category text not null default 'general';
+alter table public.events add column if not exists visibility text not null default 'public';
+alter table public.events add column if not exists attendance_enabled boolean not null default true;
+alter table public.events add column if not exists registration_enabled boolean not null default true;
+
+alter table public.events drop constraint if exists events_category_check;
+alter table public.events add constraint events_category_check check (
+  category in ('general', 'service', 'prayer', 'fellowship', 'training', 'leadership', 'conference', 'outreach', 'other')
+);
+alter table public.events drop constraint if exists events_visibility_check;
+alter table public.events add constraint events_visibility_check check (
+  visibility in ('public', 'private', 'internal')
+);
+alter table public.events drop constraint if exists events_status_check;
+alter table public.events add constraint events_status_check check (
+  status in ('draft', 'published', 'completed', 'cancelled')
+);
+
+-- ---------------------------------------------------------------------------
+-- people: ONE identity per person, member or visitor. Converting a visitor into a
+-- member changes `kind` on the same row, so registrations and attendance stay
+-- attached. What the person was at each event is kept on those records
+-- (registrations.classification, attendance.classification).
+-- ---------------------------------------------------------------------------
+create table if not exists public.people (
+  id uuid primary key default gen_random_uuid(),
+  person_no bigint generated always as identity,
+  kind text not null default 'visitor' check (kind in ('member', 'visitor')),
+  full_name text not null check (char_length(btrim(full_name)) between 2 and 100),
+  phone text not null check (phone ~ '^\+[0-9]{9,15}$'),
+  alt_phone text check (alt_phone is null or alt_phone ~ '^\+[0-9]{9,15}$'),
+  email text check (
+    email is null
+    or (char_length(email) <= 254 and email ~* '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$')
+  ),
+  gender text check (gender is null or gender in ('female', 'male', 'other')),
+  church_name text check (church_name is null or char_length(church_name) <= 150),
+  ministry text check (ministry is null or char_length(ministry) <= 100),
+  membership_date date,
+  status text not null default 'active' check (status in ('active', 'inactive')),
+  needs_review boolean not null default false,
+  review_note text check (review_note is null or char_length(review_note) <= 500),
+  notes text check (notes is null or char_length(notes) <= 1000),
+  became_member_at timestamptz,
+  created_by text not null default 'system' check (char_length(created_by) <= 200),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- A phone number identifies one person. (Two people sharing a phone are told apart
+-- by giving one of them their own number, or the alternative number field.)
+create unique index if not exists people_phone_uq on public.people (phone);
+create unique index if not exists people_person_no_uq on public.people (person_no);
+create index if not exists people_name_idx on public.people (lower(full_name));
+create index if not exists people_kind_status_idx on public.people (kind, status);
+create index if not exists people_alt_phone_idx on public.people (alt_phone) where alt_phone is not null;
+
+drop trigger if exists people_touch_updated_at on public.people;
+create trigger people_touch_updated_at
+  before update on public.people
+  for each row execute function private.touch_updated_at();
+
+-- ---------------------------------------------------------------------------
+-- registrations and attendance point at a person.
+-- ---------------------------------------------------------------------------
+alter table public.registrations add column if not exists person_id uuid references public.people (id) on delete restrict;
+alter table public.registrations add column if not exists classification text;
+alter table public.registrations drop constraint if exists registrations_classification_check;
+alter table public.registrations add constraint registrations_classification_check
+  check (classification is null or classification in ('member', 'visitor'));
+
+alter table public.attendance add column if not exists person_id uuid references public.people (id) on delete restrict;
+alter table public.attendance add column if not exists classification text;
+alter table public.attendance drop constraint if exists attendance_classification_check;
+alter table public.attendance add constraint attendance_classification_check
+  check (classification is null or classification in ('member', 'visitor'));
+-- A member can be marked present without having registered first.
+alter table public.attendance alter column registration_id drop not null;
+alter table public.attendance drop constraint if exists attendance_method_check;
+alter table public.attendance add constraint attendance_method_check
+  check (method in ('qr', 'search', 'code', 'admin', 'walkin'));
+
+-- ---------------------------------------------------------------------------
+-- One-off link-up of existing data: every distinct phone number among the old
+-- registrations becomes one visitor, and their registrations and attendance are
+-- attached to it. Nothing is deleted or changed otherwise.
+-- ---------------------------------------------------------------------------
+do $$
+begin
+  if exists (select 1 from public.registrations where person_id is null) then
+    insert into public.people (kind, full_name, phone, email, church_name, status, created_by, created_at)
+    select distinct on (r.phone)
+           'visitor', r.full_name, r.phone, r.email, r.church_name, 'active', 'migration', r.created_at
+    from public.registrations r
+    where r.person_id is null
+    order by r.phone, r.created_at desc
+    on conflict (phone) do nothing;
+
+    update public.registrations r
+    set person_id = p.id,
+        classification = coalesce(r.classification, case when p.kind = 'member' then 'member' else 'visitor' end)
+    from public.people p
+    where p.phone = r.phone and r.person_id is null;
+  end if;
+
+  update public.attendance a
+  set person_id = r.person_id,
+      classification = coalesce(a.classification, r.classification, 'visitor')
+  from public.registrations r
+  where a.registration_id = r.id and a.person_id is null;
+end $$;
+
+-- From here on every registration and every attendance record belongs to a person.
+-- (A trigger fills the link in for any insert that does not provide it.)
+do $$
+begin
+  if not exists (select 1 from public.registrations where person_id is null) then
+    alter table public.registrations alter column person_id set not null;
+  end if;
+  if not exists (select 1 from public.attendance where person_id is null) then
+    alter table public.attendance alter column person_id set not null;
+  end if;
+end $$;
+
+create index if not exists registrations_person_idx on public.registrations (person_id);
+create index if not exists attendance_person_idx on public.attendance (person_id);
+
+-- One attendance record per person per event, however it was recorded.
+create unique index if not exists attendance_event_person_uq on public.attendance (event_id, person_id);
+
+-- ---------------------------------------------------------------------------
+-- Event links: the same table serves the usher attendance links and each event's
+-- registration link. The registration link and new attendance links keep their
+-- token (token_plain) so the administrator can copy them again later; the table
+-- is not readable by the website's API roles, only through admin functions.
+-- ---------------------------------------------------------------------------
+alter table public.volunteer_access add column if not exists kind text not null default 'attendance';
+alter table public.volunteer_access drop constraint if exists volunteer_access_kind_check;
+alter table public.volunteer_access add constraint volunteer_access_kind_check
+  check (kind in ('attendance', 'registration'));
+alter table public.volunteer_access add column if not exists token_plain text;
+alter table public.volunteer_access add column if not exists allow_walkins boolean not null default true;
+alter table public.volunteer_access add column if not exists auto_managed boolean not null default false;
+alter table public.volunteer_access alter column expires_at drop not null;
+
+-- At most one live registration link per event.
+create unique index if not exists volunteer_access_one_registration_link_uq
+  on public.volunteer_access (event_id)
+  where kind = 'registration' and revoked_at is null;
+
+-- ---------------------------------------------------------------------------
+-- attendance_corrections: what was removed or added by hand, by whom and why.
+-- Removing someone's attendance keeps a full copy here.
+-- ---------------------------------------------------------------------------
+create table if not exists public.attendance_corrections (
+  id bigint generated always as identity primary key,
+  at timestamptz not null default now(),
+  actor text not null,
+  action text not null check (action in ('removed', 'added')),
+  event_id uuid not null,
+  person_id uuid,
+  registration_id uuid,
+  classification text,
+  method text,
+  original_checked_in_at timestamptz,
+  original_checked_in_by text,
+  reason text check (reason is null or char_length(reason) <= 300)
+);
+
+create index if not exists attendance_corrections_event_idx on public.attendance_corrections (event_id, at desc);
