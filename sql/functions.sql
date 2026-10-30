@@ -12,6 +12,16 @@
 -- ---------------------------------------------------------------------------
 
 -- Event times are entered and interpreted in Nairobi time.
+-- Guard: run schema.sql (successfully) before this file.
+do $$
+begin
+  if to_regclass('public.people') is null
+     or not exists (select 1 from information_schema.columns
+                    where table_schema = 'public' and table_name = 'attendance' and column_name = 'person_id') then
+    raise exception 'Run sql/schema.sql first and make sure it finishes without an error, then run this file again.';
+  end if;
+end $$;
+
 create or replace function private.event_tz()
 returns text
 language sql

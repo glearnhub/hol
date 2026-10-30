@@ -11,6 +11,14 @@
 -- RLS is enabled on every table and never disabled.
 -- =============================================================================
 
+-- Guard: run schema.sql and then functions.sql (both successfully) before this file.
+do $$
+begin
+  if to_regprocedure('public.is_staff()') is null or to_regprocedure('public.admin_event_attendance_report(uuid)') is null then
+    raise exception 'Run sql/functions.sql first and make sure it finishes without an error, then run this file again.';
+  end if;
+end $$;
+
 -- 1. Start from nothing: remove the default open grants Supabase adds.
 revoke all on all tables in schema public from anon, authenticated;
 revoke all on all sequences in schema public from anon, authenticated;
