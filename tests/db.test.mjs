@@ -869,16 +869,30 @@ check('the reports overview carries member and visitor attendance', overview2.ev
 const stats2 = await A('admin_dashboard_stats', {})
 check('dashboard stats include members and visitors', stats2.total_members >= 5 && stats2.total_visitors >= 1)
 // ---- 8.8 Member details: residence, department, deaconess, membership type -------------------------
+// Deaconesses are a list the administrator keeps; members are assigned to one of them.
+const dGraceRes = await A('admin_save_deaconess', { p_name: 'Deaconess Grace', p_phone: '0700 111 222' })
+const dRuthRes = await A('admin_save_deaconess', { p_name: 'Deaconess Ruth' })
+const dGrace = dGraceRes.id
+const dRuth = dRuthRes.id
+check('an administrator adds deaconesses to the list', dGraceRes.ok === true && dRuthRes.ok === true && dGrace !== dRuth)
+check('the same deaconess cannot be added twice (any letter case)',
+  (await A('admin_save_deaconess', { p_name: '  deaconess GRACE ' })).error === 'duplicate_name')
+check('a deaconess needs a proper name', (await A('admin_save_deaconess', { p_name: 'x' })).error === 'invalid_name')
+check('her phone number is stored in the +254 form',
+  (await db.query(`select phone from public.deaconesses where id = $1`, [dGrace])).rows[0].phone === '+254700111222')
+check('only administrators manage deaconesses', await denied(() => M('admin_save_deaconess', { p_name: 'Deaconess Hacker' })))
+check('the public cannot read the deaconess list', await denied(() => as('anon', () => db.query('select * from public.deaconesses'))))
+check('managers cannot list deaconesses', await denied(() => M('admin_list_deaconesses', {})))
 const dm = await A('admin_create_member', {
   p_full_name: 'Naomi Chepkoech', p_phone: '0766 100 200', p_residence: 'Kasarani, Nairobi',
-  p_department: 'Intercessory', p_deaconess: 'Deaconess Grace', p_membership_type: 'in_commitment' })
+  p_department: 'Intercessory', p_deaconess_id: dGrace, p_membership_type: 'in_commitment' })
 check('a member is saved with residence, department, deaconess and membership type', dm.ok === true, JSON.stringify(dm))
-const dmRow = (await db.query(`select kind, membership_type, residence, department, deaconess from public.people where id = $1`, [dm.id])).rows[0]
+const dmRow = (await db.query(`select kind, membership_type, residence, department, deaconess_id from public.people where id = $1`, [dm.id])).rows[0]
 check('the details are stored as given',
   dmRow.kind === 'member' && dmRow.membership_type === 'in_commitment' && dmRow.residence === 'Kasarani, Nairobi'
-  && dmRow.department === 'Intercessory' && dmRow.deaconess === 'Deaconess Grace', JSON.stringify(dmRow))
-const dm2 = await A('admin_create_member', { p_full_name: 'Lydia Mwangi', p_phone: '0766 100 201', p_department: 'Ushers', p_deaconess: 'Deaconess Grace', p_membership_type: 'incoming_commitment' })
-const dm3 = await A('admin_create_member', { p_full_name: 'Sarah Auma', p_phone: '0766 100 202', p_department: 'Choir', p_deaconess: 'Deaconess Ruth' })
+  && dmRow.department === 'Intercessory' && dmRow.deaconess_id === dGrace, JSON.stringify(dmRow))
+const dm2 = await A('admin_create_member', { p_full_name: 'Lydia Mwangi', p_phone: '0766 100 201', p_department: 'Ushers', p_deaconess_id: dGrace, p_membership_type: 'incoming_commitment' })
+const dm3 = await A('admin_create_member', { p_full_name: 'Sarah Auma', p_phone: '0766 100 202', p_department: 'Choir', p_deaconess_id: dRuth })
 check('the membership type defaults to Member', (await db.query(`select membership_type from public.people where id = $1`, [dm3.id])).rows[0].membership_type === 'member')
 check('incoming and in commitment class people are members (ushers and reports see them as members)',
   (await db.query(`select kind from public.people where id = $1`, [dm2.id])).rows[0].kind === 'member')
@@ -894,19 +908,23 @@ const fType = await A('admin_list_people', { p_kind: 'member', p_type: 'in_commi
 check('the directory filters by membership type', fType.rows.length >= 1 && fType.rows.every((r) => r.membership_type === 'in_commitment'))
 const fDept = await A('admin_list_people', { p_kind: 'member', p_department: 'ushers' })
 check('the directory filters by department (any letter case)', fDept.rows.some((r) => r.id === dm2.id) && fDept.rows.every((r) => r.department.toLowerCase() === 'ushers'))
-const fDea = await A('admin_list_people', { p_kind: 'member', p_deaconess: 'Deaconess Grace' })
-check('the directory filters by deaconess: everyone she mentors', fDea.total === 2 && fDea.rows.every((r) => r.deaconess === 'Deaconess Grace'))
+const fDea = await A('admin_list_people', { p_kind: 'member', p_deaconess_id: dGrace })
+check('the directory filters by deaconess: everyone she mentors', fDea.total === 2 && fDea.rows.every((r) => r.deaconess === 'Deaconess Grace' && r.deaconess_id === dGrace))
 check('searching finds people by residence', (await A('admin_list_people', { p_kind: 'member', p_search: 'kasarani' })).rows.some((r) => r.id === dm.id))
 check('searching finds people by deaconess', (await A('admin_list_people', { p_kind: 'member', p_search: 'deaconess ruth' })).rows.some((r) => r.id === dm3.id))
 check('list rows carry the new details',
   fDea.rows[0].residence !== undefined && fDea.rows[0].department !== undefined && fDea.rows[0].membership_type !== undefined)
 const opts = await A('admin_person_options', {})
-check('suggestions list the departments, deaconesses and residences already in use',
-  opts.departments.includes('Choir') && opts.deaconesses.includes('Deaconess Grace') && opts.deaconesses.includes('Deaconess Ruth') && opts.residences.includes('Kasarani, Nairobi'))
+check('suggestions list the departments and residences already in use',
+  opts.departments.includes('Choir') && opts.residences.includes('Kasarani, Nairobi'))
+const dl = await A('admin_list_deaconesses', {})
+const dlGrace = dl.rows.find((r) => r.id === dGrace)
+check('the deaconess list shows how many members each one mentors',
+  dl.ok && dlGrace.members === 2 && dl.rows.find((r) => r.id === dRuth).members >= 1 && dlGrace.active === true, JSON.stringify(dl.rows))
 check('suggestions are for administrators only', await denied(() => M('admin_person_options', {})))
 
 // moving through the stages of membership
-const upd1 = await A('admin_update_person', { p_id: dm.id, p_full_name: 'Naomi Chepkoech', p_phone: '0766 100 200', p_membership_type: 'member', p_department: 'Intercessory', p_deaconess: 'Deaconess Grace', p_residence: 'Kasarani, Nairobi' })
+const upd1 = await A('admin_update_person', { p_id: dm.id, p_full_name: 'Naomi Chepkoech', p_phone: '0766 100 200', p_membership_type: 'member', p_department: 'Intercessory', p_deaconess_id: dGrace, p_residence: 'Kasarani, Nairobi' })
 check('a member moves from commitment class to Member', upd1.ok && (await db.query(`select membership_type, kind from public.people where id = $1`, [dm.id])).rows[0].membership_type === 'member')
 check('the change is in the audit log',
   (await db.query(`select count(*)::int n from public.audit_log where action = 'membership_type_changed'`)).rows[0].n >= 1)
@@ -919,9 +937,9 @@ check('converting a visitor into Member is still the default',
   (await A('admin_convert_visitor', { p_id: cv, p_full_name: 'Convert Into Class', p_phone: '0766 100 300', p_residence: 'Rongai' })).ok
   && (await db.query(`select membership_type, residence from public.people where id = $1`, [cv])).rows[0].membership_type === 'member')
 const cv2 = (await db.query(`insert into public.people (kind, full_name, phone) values ('visitor', 'Convert Into Incoming', '+254766100301') returning id`)).rows[0].id
-const cvr = await A('admin_convert_visitor', { p_id: cv2, p_full_name: 'Convert Into Incoming', p_phone: '0766 100 301', p_membership_type: 'incoming_commitment', p_deaconess: 'Deaconess Ruth' })
+const cvr = await A('admin_convert_visitor', { p_id: cv2, p_full_name: 'Convert Into Incoming', p_phone: '0766 100 301', p_membership_type: 'incoming_commitment', p_deaconess_id: dRuth })
 check('a visitor can join as Incoming Commitment Class',
-  cvr.ok && (await db.query(`select kind, membership_type, deaconess from public.people where id = $1`, [cv2])).rows[0].membership_type === 'incoming_commitment')
+  cvr.ok && (await db.query(`select kind, membership_type, deaconess_id from public.people where id = $1`, [cv2])).rows[0].membership_type === 'incoming_commitment')
 const cv3 = (await db.query(`insert into public.people (kind, full_name, phone) values ('visitor', 'Convert To Visitor', '+254766100302') returning id`)).rows[0].id
 check('"Visitor" is not a type to convert into', (await A('admin_convert_visitor', { p_id: cv3, p_full_name: 'Convert To Visitor', p_phone: '0766 100 302', p_membership_type: 'visitor' })).error === 'invalid_type')
 const upd3 = await A('admin_update_person', { p_id: cv3, p_full_name: 'Convert To Visitor', p_phone: '0766 100 302', p_membership_type: 'in_commitment' })
@@ -944,6 +962,30 @@ check('the event report counts them under members',
 const prof = await A('admin_get_person', { p_id: dm2.id })
 check('the profile includes residence, department, deaconess and type',
   prof.person.membership_type === 'incoming_commitment' && prof.person.department === 'Ushers' && prof.person.deaconess === 'Deaconess Grace')
+check('a made-up deaconess is refused',
+  (await A('admin_create_member', { p_full_name: 'Bad Deaconess', p_phone: '0766 100 400', p_deaconess_id: '00000000-0000-0000-0000-000000000000' })).error === 'invalid_deaconess')
+const dTemp = (await A('admin_save_deaconess', { p_name: 'Deaconess Temporary' })).id
+check('a deaconess who mentors nobody can be removed', (await A('admin_delete_deaconess', { p_id: dTemp })).ok === true
+  && !(await A('admin_list_deaconesses', {})).rows.some((r) => r.id === dTemp))
+const inUse = await A('admin_delete_deaconess', { p_id: dGrace })
+check('a deaconess who mentors members cannot be removed', inUse.error === 'in_use', JSON.stringify(inUse))
+const dOld = (await A('admin_save_deaconess', { p_name: 'Deaconess Retired' })).id
+const oldMember = await A('admin_create_member', { p_full_name: 'Mentored By Retired', p_phone: '0766 100 401', p_deaconess_id: dOld })
+await A('admin_save_deaconess', { p_id: dOld, p_name: 'Deaconess Retired', p_active: false })
+check('an inactive deaconess is not offered for new members',
+  (await A('admin_create_member', { p_full_name: 'Another Person', p_phone: '0766 100 402', p_deaconess_id: dOld })).error === 'invalid_deaconess')
+check('...but members she already mentors keep her',
+  (await A('admin_update_person', { p_id: oldMember.id, p_full_name: 'Mentored By Retired', p_phone: '0766 100 401', p_deaconess_id: dOld, p_church: 'Grace Chapel' })).ok === true)
+check('...and can be moved to another deaconess',
+  (await A('admin_update_person', { p_id: oldMember.id, p_full_name: 'Mentored By Retired', p_phone: '0766 100 401', p_deaconess_id: dRuth })).ok === true
+  && (await db.query(`select deaconess_id from public.people where id = $1`, [oldMember.id])).rows[0].deaconess_id === dRuth)
+const renamed = await A('admin_save_deaconess', { p_id: dGrace, p_name: 'Deaconess Grace Njeri', p_phone: '0700 111 222' })
+check('renaming a deaconess updates every member she mentors',
+  renamed.ok && (await A('admin_list_people', { p_kind: 'member', p_deaconess_id: dGrace })).rows.every((r) => r.deaconess === 'Deaconess Grace Njeri'))
+await A('admin_save_deaconess', { p_id: dGrace, p_name: 'Deaconess Grace' })
+check('a deaconess can be left out of a member (no mentor)',
+  (await A('admin_update_person', { p_id: oldMember.id, p_full_name: 'Mentored By Retired', p_phone: '0766 100 401' })).ok === true
+  && (await db.query(`select deaconess_id from public.people where id = $1`, [oldMember.id])).rows[0].deaconess_id === null)
 
 // ---- 8.7 Staff look-ups and what managers may see ------------------------------------------------
 const ss = await M('staff_search_people', { p_event_id: evQr, p_query: 'wambui' })

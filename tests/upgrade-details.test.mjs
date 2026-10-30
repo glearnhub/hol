@@ -89,7 +89,7 @@ const cols = (await q(`select column_name from information_schema.columns where 
 check('"ministry" became "department"', cols.includes('department') && !cols.includes('ministry'))
 check('what was typed in ministry is kept as the department',
   (await q(`select department from public.people where id = $1`, [m1.id]))[0].department === 'Choir')
-check('the new fields exist', ['residence', 'deaconess', 'membership_type'].every((c) => cols.includes(c)))
+check('the new fields exist', ['residence', 'deaconess_id', 'membership_type'].every((c) => cols.includes(c)))
 check('existing members become the type Member',
   (await q(`select count(*)::int n from public.people where kind = 'member' and membership_type = 'member'`))[0].n === 2)
 check('existing visitors stay visitors',
@@ -104,15 +104,17 @@ check('the old attendance is still attached to the member',
 const list = await A('admin_list_people', { p_kind: 'member' })
 check('the directory lists them with the new details',
   list.total === 2 && list.rows.every((r) => r.membership_type === 'member' && 'residence' in r && 'deaconess' in r && 'department' in r))
+const grace = (await A('admin_save_deaconess', { p_name: 'Deaconess Grace' })).id
+const ruth = (await A('admin_save_deaconess', { p_name: 'Deaconess Ruth' })).id
 const edit = await A('admin_update_person', { p_id: m1.id, p_full_name: 'Esther Wambui Kamau', p_phone: '0702499324', p_department: 'Choir',
-  p_residence: 'Kasarani', p_deaconess: 'Deaconess Grace', p_membership_type: 'member' })
+  p_residence: 'Kasarani', p_deaconess_id: grace, p_membership_type: 'member' })
 check('residence and deaconess can be saved on an existing member', edit.ok === true, JSON.stringify(edit))
 check('...and found by the deaconess filter',
-  (await A('admin_list_people', { p_kind: 'member', p_deaconess: 'deaconess grace' })).rows.length === 1)
+  (await A('admin_list_people', { p_kind: 'member', p_deaconess_id: grace })).rows.length === 1)
 const newOne = await A('admin_create_member', { p_full_name: 'Naomi New', p_phone: '0766 100 200', p_membership_type: 'incoming_commitment', p_department: 'Ushers' })
 check('a new person can join as Incoming Commitment Class', newOne.ok === true)
 const vera = (await q(`select id from public.people where full_name = 'Vera Visiting'`))[0].id
-const conv = await A('admin_convert_visitor', { p_id: vera, p_full_name: 'Vera Visiting', p_phone: '0722000001', p_membership_type: 'in_commitment', p_deaconess: 'Deaconess Ruth' })
+const conv = await A('admin_convert_visitor', { p_id: vera, p_full_name: 'Vera Visiting', p_phone: '0722000001', p_membership_type: 'in_commitment', p_deaconess_id: ruth })
 check('a migrated visitor can be converted into In Commitment Class', conv.ok === true && conv.registrations_kept === 1, JSON.stringify(conv))
 check('the old function signatures are gone (no ambiguous overloads)',
   (await q(`select count(*)::int n from pg_proc p join pg_namespace n on n.oid = p.pronamespace

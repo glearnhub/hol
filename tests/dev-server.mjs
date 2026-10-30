@@ -89,11 +89,15 @@ await db.exec('reset role')
 await db.query(`select set_config('request.jwt.claim.sub', '', false)`)
 
 // Members, visitors and a few past meetings this year, so the new pages have data to show.
+const deaconessId = {}
+for (const name of ['Deaconess Grace', 'Deaconess Ruth']) {
+  deaconessId[name] = (await db.query(`insert into public.deaconesses (name) values ($1) returning id`, [name])).rows[0].id
+}
 const person = async (kind, name, phone, department = null, deaconess = null, residence = null, type = null) =>
   (await db.query(
-    `insert into public.people (kind, membership_type, full_name, phone, department, deaconess, residence, membership_date)
+    `insert into public.people (kind, membership_type, full_name, phone, department, deaconess_id, residence, membership_date)
      values ($1, $2, $3, $4, $5, $6, $7, case when $1 = 'member' then current_date - 400 end) returning id`,
-    [kind, type || (kind === 'member' ? 'member' : 'visitor'), name, phone, department, deaconess, residence])).rows[0].id
+    [kind, type || (kind === 'member' ? 'member' : 'visitor'), name, phone, department, deaconess ? deaconessId[deaconess] : null, residence])).rows[0].id
 const esther = await person('member', 'Esther Wambui Kamau', '+254702499324', 'Choir', 'Deaconess Grace', 'Kasarani, Nairobi')
 const ruth = await person('member', 'Ruth Chebet', '+254711000002', 'Ushers', 'Deaconess Ruth', 'Ruaka')
 const mary = await person('member', 'Mary Atieno', '+254711000003', null, 'Deaconess Grace', 'Rongai', 'in_commitment')

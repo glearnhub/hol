@@ -2139,14 +2139,15 @@ $$;
 -- Validates the fields shared by "create member", "edit" and "convert".
 -- p_type is the membership type; blank means "not given" (keep what the person has).
 drop function if exists private.validate_person_fields(text, text, text, text, text, text, text, text);
+drop function if exists private.validate_person_fields(text, text, text, text, text, text, text, text, text, text, text);
 
 create or replace function private.validate_person_fields(
   p_full_name text, p_phone text, p_alt_phone text, p_email text, p_gender text,
   p_department text, p_church text, p_notes text,
-  p_residence text default null, p_deaconess text default null, p_type text default null,
+  p_residence text default null, p_type text default null,
   out v_name text, out v_phone text, out v_alt text, out v_email text,
   out v_gender text, out v_department text, out v_church text, out v_notes text,
-  out v_residence text, out v_deaconess text, out v_type text,
+  out v_residence text, out v_type text,
   out v_error jsonb
 )
 language plpgsql
@@ -2163,7 +2164,6 @@ begin
   v_church := private.clean_text(p_church, 150);
   v_notes := nullif(btrim(coalesce(p_notes, '')), '');
   v_residence := private.clean_text(p_residence, 150);
-  v_deaconess := private.clean_text(p_deaconess, 100);
   v_type := nullif(lower(btrim(coalesce(p_type, ''))), '');
 
   if v_name is null or char_length(v_name) < 2 then
@@ -2186,6 +2186,7 @@ end;
 $$;
 
 drop function if exists public.admin_create_member(text, text, text, text, text, date, text, text, text, boolean);
+drop function if exists public.admin_create_member(text, text, text, text, text, date, text, text, text, boolean, text, text, text);
 
 create or replace function public.admin_create_member(
   p_full_name text,
@@ -2199,7 +2200,7 @@ create or replace function public.admin_create_member(
   p_notes text default null,
   p_force boolean default false,
   p_residence text default null,
-  p_deaconess text default null,
+  p_deaconess_id uuid default null,
   p_membership_type text default 'member'
 )
 returns jsonb
@@ -2220,12 +2221,16 @@ begin
 
   select * into f from private.validate_person_fields(
     p_full_name, p_phone, p_alt_phone, p_email, p_gender, p_department, p_church, p_notes,
-    p_residence, p_deaconess, p_membership_type);
+    p_residence, p_membership_type);
   if f.v_error is not null then
     return f.v_error;
   end if;
   v_type := coalesce(f.v_type, 'member');
   v_kind := case when v_type = 'visitor' then 'visitor' else 'member' end;
+  if p_deaconess_id is not null
+     and not exists (select 1 from public.deaconesses where id = p_deaconess_id and active) then
+    return private.fail('invalid_deaconess', 'Choose a deaconess from the list.');
+  end if;
 
   -- The same phone number is never registered twice: review the existing record instead.
   select * into samephone from public.people where phone = f.v_phone or alt_phone = f.v_phone;
@@ -2244,11 +2249,11 @@ begin
 
   insert into public.people
     (kind, membership_type, full_name, phone, alt_phone, email, gender, membership_date, department,
-     residence, deaconess, church_name, notes, created_by)
+     residence, deaconess_id, church_name, notes, created_by)
   values
     (v_kind, v_type, f.v_name, f.v_phone, f.v_alt, f.v_email, f.v_gender,
      case when v_kind = 'member' then coalesce(p_membership_date, (now() at time zone private.event_tz())::date) end,
-     f.v_department, f.v_residence, f.v_deaconess, f.v_church, f.v_notes, 'admin:' || auth.uid()::text)
+     f.v_department, f.v_residence, p_deaconess_id, f.v_church, f.v_notes, 'admin:' || auth.uid()::text)
   returning * into p;
 
   perform private.audit('admin:' || auth.uid()::text, 'member_created', null,
@@ -2260,6 +2265,7 @@ $$;
 -- Edits a person. Changing the membership type to or from "visitor" moves them between
 -- the visitor and member lists; their registrations and attendance stay with them.
 drop function if exists public.admin_update_person(uuid, text, text, text, text, text, date, text, text, text, boolean);
+drop function if exists public.admin_update_person(uuid, text, text, text, text, text, date, text, text, text, boolean, text, text, text);
 
 create or replace function public.admin_update_person(
   p_id uuid,
@@ -2274,7 +2280,7 @@ create or replace function public.admin_update_person(
   p_notes text default null,
   p_clear_review boolean default false,
   p_residence text default null,
-  p_deaconess text default null,
+  p_deaconess_id uuid default null,
   p_membership_type text default null
 )
 returns jsonb
@@ -2300,12 +2306,16 @@ begin
 
   select * into f from private.validate_person_fields(
     p_full_name, p_phone, p_alt_phone, p_email, p_gender, p_department, p_church, p_notes,
-    p_residence, p_deaconess, p_membership_type);
+    p_residence, p_membership_type);
   if f.v_error is not null then
     return f.v_error;
   end if;
   v_type := coalesce(f.v_type, cur.membership_type);
   v_kind := case when v_type = 'visitor' then 'visitor' else 'member' end;
+  if p_deaconess_id is not null
+     and not exists (select 1 from public.deaconesses where id = p_deaconess_id and (active or id = cur.deaconess_id)) then
+    return private.fail('invalid_deaconess', 'Choose a deaconess from the list.');
+  end if;
 
   select * into other from public.people where (phone = f.v_phone or alt_phone = f.v_phone) and id <> p_id;
   if found then
@@ -2322,7 +2332,7 @@ begin
                                            case when cur.kind = 'visitor' then (now() at time zone private.event_tz())::date end)
                              else p_membership_date end,
       became_member_at = case when cur.kind = 'visitor' and v_kind = 'member' then now() else became_member_at end,
-      department = f.v_department, residence = f.v_residence, deaconess = f.v_deaconess,
+      department = f.v_department, residence = f.v_residence, deaconess_id = p_deaconess_id,
       church_name = f.v_church, notes = f.v_notes,
       needs_review = case when coalesce(p_clear_review, false) or (cur.kind = 'visitor' and v_kind = 'member') then false else needs_review end,
       review_note = case when coalesce(p_clear_review, false) or (cur.kind = 'visitor' and v_kind = 'member') then null else review_note end,
@@ -2366,6 +2376,7 @@ $$;
 -- person row, so every registration and attendance record stays attached; what they were
 -- at each event is kept on those records. Runs as one transaction.
 drop function if exists public.admin_convert_visitor(uuid, text, text, text, text, text, date, text, text, text);
+drop function if exists public.admin_convert_visitor(uuid, text, text, text, text, text, date, text, text, text, text, text, text);
 
 create or replace function public.admin_convert_visitor(
   p_id uuid,
@@ -2379,7 +2390,7 @@ create or replace function public.admin_convert_visitor(
   p_church text default null,
   p_notes text default null,
   p_residence text default null,
-  p_deaconess text default null,
+  p_deaconess_id uuid default null,
   p_membership_type text default 'member'
 )
 returns jsonb
@@ -2409,13 +2420,17 @@ begin
 
   select * into f from private.validate_person_fields(
     p_full_name, p_phone, p_alt_phone, p_email, p_gender, p_department, p_church, p_notes,
-    p_residence, p_deaconess, p_membership_type);
+    p_residence, p_membership_type);
   if f.v_error is not null then
     return f.v_error;
   end if;
   v_type := coalesce(f.v_type, 'member');
   if v_type = 'visitor' then
     return private.fail('invalid_type', 'Choose the membership type they are joining as (not Visitor).');
+  end if;
+  if p_deaconess_id is not null
+     and not exists (select 1 from public.deaconesses where id = p_deaconess_id and (active or id = cur.deaconess_id)) then
+    return private.fail('invalid_deaconess', 'Choose a deaconess from the list.');
   end if;
 
   select * into other from public.people where (phone = f.v_phone or alt_phone = f.v_phone) and id <> p_id;
@@ -2428,7 +2443,7 @@ begin
   update public.people
   set kind = 'member', membership_type = v_type, status = 'active', needs_review = false, review_note = null,
       full_name = f.v_name, phone = f.v_phone, alt_phone = f.v_alt, email = f.v_email, gender = f.v_gender,
-      department = f.v_department, residence = f.v_residence, deaconess = f.v_deaconess,
+      department = f.v_department, residence = f.v_residence, deaconess_id = p_deaconess_id,
       church_name = f.v_church, notes = f.v_notes,
       membership_date = coalesce(p_membership_date, (now() at time zone private.event_tz())::date),
       became_member_at = now()
@@ -2445,7 +2460,7 @@ begin
 end;
 $$;
 
--- Distinct departments, deaconesses and residences already in use, for suggestions and filters.
+-- Distinct departments and residences already in use, for suggestions and filters.
 create or replace function public.admin_person_options()
 returns jsonb
 language plpgsql
@@ -2459,8 +2474,6 @@ begin
     'ok', true,
     'departments', (select coalesce(jsonb_agg(d order by lower(d)), '[]'::jsonb)
                     from (select distinct department as d from public.people where department is not null limit 300) x),
-    'deaconesses', (select coalesce(jsonb_agg(d order by lower(d)), '[]'::jsonb)
-                    from (select distinct deaconess as d from public.people where deaconess is not null limit 300) x),
     'residences', (select coalesce(jsonb_agg(d order by lower(d)), '[]'::jsonb)
                    from (select distinct residence as d from public.people where residence is not null limit 300) x)
   );
@@ -2469,6 +2482,7 @@ $$;
 
 -- Paged directory of members or visitors with search, type and attendance filters.
 drop function if exists public.admin_list_people(text, text, text, text, date, date, text, integer, integer, boolean, integer);
+drop function if exists public.admin_list_people(text, text, text, text, date, date, text, integer, integer, boolean, integer, text, text, text);
 
 create or replace function public.admin_list_people(
   p_kind text default 'member',
@@ -2484,7 +2498,7 @@ create or replace function public.admin_list_people(
   p_min_attended integer default null,
   p_type text default 'all',
   p_department text default null,
-  p_deaconess text default null
+  p_deaconess_id uuid default null
 )
 returns jsonb
 language plpgsql
@@ -2497,7 +2511,6 @@ declare
   s_digits text := regexp_replace(regexp_replace(coalesce(p_search, ''), '[^0-9]', '', 'g'), '^0+', '');
   s_no bigint := null;
   v_dept text := nullif(lower(btrim(coalesce(p_department, ''))), '');
-  v_dea text := nullif(lower(btrim(coalesce(p_deaconess, ''))), '');
   v_limit integer := least(greatest(coalesce(p_limit, 20), 1), 5000);
   v_offset integer := greatest(coalesce(p_offset, 0), 0);
   v_total integer;
@@ -2521,23 +2534,24 @@ begin
     join public.events e on e.id = a.event_id
     group by a.person_id
   ), base as (
-    select p.*, private.person_label(p) as label, coalesce(t.attended_total, 0) as attended_total,
+    select p.*, private.person_label(p) as label, dc.name as deaconess_name, coalesce(t.attended_total, 0) as attended_total,
            coalesce(t.attended_range, 0) as attended_range, t.last_attended,
            (select count(*) from public.registrations r where r.person_id = p.id)::integer as registrations
     from public.people p
     left join att t on t.person_id = p.id
+    left join public.deaconesses dc on dc.id = p.deaconess_id
     where (p_kind = 'all' or p.kind = p_kind)
       and (p_status = 'all' or p.status = p_status)
       and (p_type is null or p_type = 'all' or p.membership_type = p_type)
       and (v_dept is null or lower(p.department) = v_dept)
-      and (v_dea is null or lower(p.deaconess) = v_dea)
+      and (p_deaconess_id is null or p.deaconess_id = p_deaconess_id)
       and (not coalesce(p_review, false) or p.needs_review)
       and (
         s = ''
         or (s_no is not null and p.person_no = s_no)
         or lower(p.full_name) like '%' || private.escape_like(s) || '%' escape '\'
         or lower(coalesce(p.department, '')) like '%' || private.escape_like(s) || '%' escape '\'
-        or lower(coalesce(p.deaconess, '')) like '%' || private.escape_like(s) || '%' escape '\'
+        or lower(coalesce(dc.name, '')) like '%' || private.escape_like(s) || '%' escape '\'
         or lower(coalesce(p.residence, '')) like '%' || private.escape_like(s) || '%' escape '\'
         or (char_length(s_digits) >= 3 and (p.phone like '%' || s_digits || '%' or p.alt_phone like '%' || s_digits || '%'))
       )
@@ -2562,23 +2576,24 @@ begin
     join public.events e on e.id = a.event_id
     group by a.person_id
   ), base as (
-    select p.*, private.person_label(p) as label, coalesce(t.attended_total, 0) as attended_total,
+    select p.*, private.person_label(p) as label, dc.name as deaconess_name, coalesce(t.attended_total, 0) as attended_total,
            coalesce(t.attended_range, 0) as attended_range, t.last_attended,
            (select count(*) from public.registrations r where r.person_id = p.id)::integer as registrations
     from public.people p
     left join att t on t.person_id = p.id
+    left join public.deaconesses dc on dc.id = p.deaconess_id
     where (p_kind = 'all' or p.kind = p_kind)
       and (p_status = 'all' or p.status = p_status)
       and (p_type is null or p_type = 'all' or p.membership_type = p_type)
       and (v_dept is null or lower(p.department) = v_dept)
-      and (v_dea is null or lower(p.deaconess) = v_dea)
+      and (p_deaconess_id is null or p.deaconess_id = p_deaconess_id)
       and (not coalesce(p_review, false) or p.needs_review)
       and (
         s = ''
         or (s_no is not null and p.person_no = s_no)
         or lower(p.full_name) like '%' || private.escape_like(s) || '%' escape '\'
         or lower(coalesce(p.department, '')) like '%' || private.escape_like(s) || '%' escape '\'
-        or lower(coalesce(p.deaconess, '')) like '%' || private.escape_like(s) || '%' escape '\'
+        or lower(coalesce(dc.name, '')) like '%' || private.escape_like(s) || '%' escape '\'
         or lower(coalesce(p.residence, '')) like '%' || private.escape_like(s) || '%' escape '\'
         or (char_length(s_digits) >= 3 and (p.phone like '%' || s_digits || '%' or p.alt_phone like '%' || s_digits || '%'))
       )
@@ -2597,7 +2612,7 @@ begin
       case when p_sort = 'recent_desc' then f.created_at end desc,
       case when p_sort = 'last_attended_desc' then f.last_attended end desc nulls last,
       case when p_sort = 'department_asc' then lower(coalesce(f.department, 'zzz')) end asc,
-      case when p_sort = 'deaconess_asc' then lower(coalesce(f.deaconess, 'zzz')) end asc,
+      case when p_sort = 'deaconess_asc' then lower(coalesce(f.deaconess_name, 'zzz')) end asc,
       lower(f.full_name) asc
     limit v_limit offset v_offset
   )
@@ -2606,7 +2621,7 @@ begin
     'membership_type', o.membership_type,
     'full_name', o.full_name, 'phone', o.phone, 'alt_phone', o.alt_phone, 'email', o.email,
     'gender', o.gender, 'church_name', o.church_name, 'department', o.department,
-    'residence', o.residence, 'deaconess', o.deaconess,
+    'residence', o.residence, 'deaconess_id', o.deaconess_id, 'deaconess', o.deaconess_name,
     'membership_date', o.membership_date, 'status', o.status, 'needs_review', o.needs_review,
     'review_note', o.review_note, 'notes', o.notes, 'became_member_at', o.became_member_at,
     'created_at', o.created_at, 'attended_total', o.attended_total, 'attended_range', o.attended_range,
@@ -2615,6 +2630,109 @@ begin
   from (select o2.*, row_number() over () as rn from ordered o2) o;
 
   return jsonb_build_object('ok', true, 'total', v_total, 'rows', v_rows);
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Deaconesses: the leaders assigned to mentor members. The administrator keeps the list;
+-- members are then assigned to one by choosing from it.
+-- ---------------------------------------------------------------------------
+create or replace function public.admin_list_deaconesses()
+returns jsonb
+language plpgsql
+security definer
+stable
+set search_path = public, pg_temp
+as $$
+declare
+  v_rows jsonb;
+begin
+  perform private.require_admin();
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', d.id, 'name', d.name, 'phone', d.phone, 'active', d.active, 'created_at', d.created_at,
+    'members', (select count(*) from public.people p where p.deaconess_id = d.id and p.kind = 'member'),
+    'inactive_members', (select count(*) from public.people p where p.deaconess_id = d.id and p.kind = 'member' and p.status = 'inactive')
+  ) order by d.active desc, lower(d.name)), '[]'::jsonb) into v_rows
+  from public.deaconesses d;
+  return jsonb_build_object('ok', true, 'rows', v_rows);
+end;
+$$;
+
+-- Adds a deaconess (p_id null) or edits one. Deactivating keeps her on the members she
+-- already mentors but stops her being offered for new ones.
+create or replace function public.admin_save_deaconess(
+  p_name text,
+  p_phone text default null,
+  p_id uuid default null,
+  p_active boolean default true
+)
+returns jsonb
+language plpgsql
+security definer
+volatile
+set search_path = public, pg_temp
+as $$
+declare
+  v_name text := private.clean_text(p_name, 100);
+  v_phone text := case when nullif(btrim(coalesce(p_phone, '')), '') is null then null else private.normalize_phone(p_phone) end;
+  other public.deaconesses;
+  d public.deaconesses;
+begin
+  perform private.require_admin();
+
+  if v_name is null or char_length(v_name) < 2 then
+    return private.fail('invalid_name', 'Enter the deaconess''s name.');
+  end if;
+  if v_phone is not null and v_phone !~ '^\+[0-9]{9,15}$' then
+    return private.fail('invalid_phone', 'The phone number does not look right.');
+  end if;
+
+  select * into other from public.deaconesses
+  where lower(btrim(name)) = lower(v_name) and (p_id is null or id <> p_id);
+  if found then
+    return private.fail('duplicate_name', format('%s is already in the list.', other.name));
+  end if;
+
+  if p_id is null then
+    insert into public.deaconesses (name, phone, active, created_by)
+    values (v_name, v_phone, coalesce(p_active, true), 'admin:' || auth.uid()::text)
+    returning * into d;
+    perform private.audit('admin:' || auth.uid()::text, 'deaconess_added', null, jsonb_build_object('deaconess_id', d.id));
+  else
+    update public.deaconesses set name = v_name, phone = v_phone, active = coalesce(p_active, true)
+    where id = p_id returning * into d;
+    if d.id is null then
+      return private.fail('not_found', 'Deaconess not found.');
+    end if;
+    perform private.audit('admin:' || auth.uid()::text, 'deaconess_updated', null, jsonb_build_object('deaconess_id', d.id));
+  end if;
+  return jsonb_build_object('ok', true, 'id', d.id);
+end;
+$$;
+
+-- A deaconess who mentors nobody can be removed. Otherwise deactivate her instead.
+create or replace function public.admin_delete_deaconess(p_id uuid)
+returns jsonb
+language plpgsql
+security definer
+volatile
+set search_path = public, pg_temp
+as $$
+declare
+  n integer;
+begin
+  perform private.require_admin();
+  select count(*) into n from public.people where deaconess_id = p_id;
+  if n > 0 then
+    return private.fail('in_use',
+      format('She mentors %s member(s). Move them to another deaconess first, or deactivate her instead.', n));
+  end if;
+  delete from public.deaconesses where id = p_id;
+  if not found then
+    return private.fail('not_found', 'Deaconess not found.');
+  end if;
+  perform private.audit('admin:' || auth.uid()::text, 'deaconess_deleted', null, jsonb_build_object('deaconess_id', p_id));
+  return jsonb_build_object('ok', true);
 end;
 $$;
 
@@ -2673,7 +2791,9 @@ begin
 
   return jsonb_build_object(
     'ok', true,
-    'person', to_jsonb(p) - 'person_no' || jsonb_build_object('label', private.person_label(p)),
+    'person', to_jsonb(p) - 'person_no' || jsonb_build_object(
+      'label', private.person_label(p),
+      'deaconess', (select d.name from public.deaconesses d where d.id = p.deaconess_id)),
     'year', v_year, 'year_total', v_year_total,
     'years', v_years, 'history', v_history, 'registrations', v_regs
   );

@@ -33,7 +33,7 @@ function listArgs(extra = {}) {
     p_status: state.status,
     p_type: state.type,
     p_department: state.department || null,
-    p_deaconess: state.deaconess || null,
+    p_deaconess_id: state.deaconess || null,
     p_attended: state.attended,
     p_from: state.from || null,
     p_to: state.to || null,
@@ -234,6 +234,7 @@ const FIELD_ERRORS = {
   invalid_email: 'email',
   invalid_gender: 'gender',
   invalid_type: 'membership_type',
+  invalid_deaconess: 'deaconess_id',
   invalid_notes: 'notes',
   duplicate_phone: 'phone',
 }
@@ -266,6 +267,7 @@ function openForm(mode, person = null) {
   const typeSelect = $('#p-type')
   for (const option of typeSelect.options) option.hidden = mode === 'convert' && option.value === 'visitor'
   typeSelect.value = person ? (mode === 'convert' ? 'member' : person.membership_type || 'member') : 'member'
+  fillDeaconessSelect(person ? person.deaconess_id : null)
 
   if (person) {
     form.full_name.value = person.full_name || ''
@@ -276,7 +278,6 @@ function openForm(mode, person = null) {
     form.church_name.value = person.church_name || ''
     form.department.value = person.department || ''
     form.residence.value = person.residence || ''
-    form.deaconess.value = person.deaconess || ''
     form.membership_date.value = person.membership_date ? String(person.membership_date).slice(0, 10) : ''
     form.notes.value = person.notes || ''
   }
@@ -295,7 +296,7 @@ function readForm() {
     p_membership_date: f.membership_date.value || null,
     p_department: f.department.value.trim() || null,
     p_residence: f.residence.value.trim() || null,
-    p_deaconess: f.deaconess.value.trim() || null,
+    p_deaconess_id: f.deaconess_id.value || null,
     p_membership_type: f.membership_type.value || null,
     p_church: f.church_name.value.trim() || null,
     p_notes: f.notes.value.trim() || null,
@@ -561,16 +562,43 @@ export async function initPeople(mode) {
   await Promise.all([loadPage(), refreshStats(), loadOptions()])
 }
 
-// Departments, deaconesses and residences already in use: suggestions in the form, choices in the filters.
+// The deaconess dropdown in the form: the active deaconesses, plus the person's current one
+// even if she has been deactivated since, so editing never silently drops her.
+let deaconesses = []
+function fillDeaconessSelect(currentId) {
+  const select = $('#p-deaconess')
+  select.replaceChildren(
+    el('option', { value: '' }, 'No deaconess assigned'),
+    ...deaconesses
+      .filter((d) => d.active || d.id === currentId)
+      .map((d) => el('option', { value: d.id }, d.active ? d.name : `${d.name} (inactive)`))
+  )
+  select.value = currentId || ''
+}
+
+// Departments and residences already in use are offered as suggestions; the deaconess choices come from her list.
 async function loadOptions() {
   try {
     const o = await callRpc('admin_person_options')
     const fill = (id, values) => $(id).replaceChildren(...values.map((v) => el('option', { value: v })))
     fill('#dl-department', o.departments)
-    fill('#dl-deaconess', o.deaconesses)
     fill('#dl-residence', o.residences)
     $('#f-department').append(...o.departments.map((d) => el('option', { value: d }, d)))
-    $('#f-deaconess').append(...o.deaconesses.map((d) => el('option', { value: d }, d)))
+    // The deaconess list: filter choices on the page, and the choices in the form.
+    const dl = await callRpc('admin_list_deaconesses')
+    deaconesses = dl.rows
+    $('#f-deaconess').replaceChildren(
+      el('option', { value: '' }, 'All deaconesses'),
+      ...deaconesses.map((d) => el('option', { value: d.id }, d.active ? d.name : `${d.name} (inactive)`))
+    )
+    // A link from the Deaconesses page (members.html?deaconess=...) opens already filtered.
+    const wanted = new URLSearchParams(window.location.search).get('deaconess')
+    if (wanted && deaconesses.some((d) => d.id === wanted)) {
+      $('#f-deaconess').value = wanted
+      state.deaconess = wanted
+      state.page = 0
+      await loadPage()
+    }
   } catch {
     /* suggestions are a convenience */
   }

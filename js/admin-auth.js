@@ -14,6 +14,7 @@ const NAV = [
   { key: 'events', href: 'manage-events.html', label: 'Events', icon: '📅', roles: ['admin', 'manager'] },
   { key: 'members', href: 'members.html', label: 'Members', icon: '👥', roles: ['admin'] },
   { key: 'visitors', href: 'visitors.html', label: 'Visitors', icon: '🙋', roles: ['admin'] },
+  { key: 'deaconesses', href: 'deaconesses.html', label: 'Deaconesses', icon: '🤝', roles: ['admin'] },
   { key: 'ranking', href: 'attendance-ranking.html', label: 'Attendance ranking', icon: '🏆', roles: ['admin'] },
   { key: 'reports', href: 'reports.html', label: 'Reports', icon: '📊', roles: ['admin', 'manager'] },
 ]

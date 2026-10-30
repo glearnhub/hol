@@ -398,11 +398,16 @@ Besides name, phone, email, gender, church and notes, each person has:
 * **Residence:** where they live, for example "Kasarani, Nairobi".
 * **Department:** where they serve in church. (This is the field that used to be called
   "ministry"; whatever was typed there is kept.)
-* **Deaconess:** the leader assigned to mentor them.
+* **Deaconess:** the leader assigned to mentor them, chosen from a list. The administrator
+  keeps that list under **Deaconesses** (add a name once, edit it, deactivate or remove it);
+  when registering or editing a member you just pick from the dropdown, so names are always
+  spelled the same way. A deactivated deaconess keeps her current members but is not offered for
+  new ones, and one who mentors members cannot be removed until they are moved. Click the member
+  count next to a deaconess to see everyone she mentors.
 
 On the Members page you can filter by membership type, department and deaconess (for example
 everyone a particular deaconess mentors), search by any of these, sort by department or
-deaconess, and export them all to CSV. Departments, deaconesses and residences already in use
+deaconess, and export them all to CSV. Departments and residences already in use
 are offered as suggestions while typing, so spelling stays consistent.
 
 ### Events and their two links
@@ -458,7 +463,9 @@ never database IDs, and the table that holds them cannot be read through the web
    download a backup). Keep it until you have checked the site.
 2. In the SQL editor run, in this order, the whole of: `sql/schema.sql`, `sql/functions.sql`,
    `sql/policies.sql`. All three can be run again safely.
-3. The upgrade links old data automatically: every distinct phone number among the old
+3. If deaconess names were typed in before the list existed, each distinct name becomes an
+   entry in the Deaconesses list and its members are linked to it automatically.
+   The upgrade links old data automatically: every distinct phone number among the old
    registrations becomes one **visitor**, and old registrations and attendance are attached to
    it. Nothing is deleted, with one tidy-up: if the same phone number was registered twice for one event and both were checked in, the person is counted once (the earliest check-in is kept) and the extra one is copied to `attendance_corrections` with the actor `system:upgrade`. Convert regular people to members on the *Visitors* page. Existing
    events become public events with both links created.

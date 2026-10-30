@@ -178,14 +178,17 @@
                   <label for="p-department">Department (optional)</label>
                   <input id="p-department" name="department" type="text" maxlength="100" autocomplete="off" list="dl-department" placeholder="Where they serve in church" />
                 </div>
-                <div class="field" data-field="deaconess">
+                <div class="field" data-field="deaconess_id">
                   <label for="p-deaconess">Deaconess (optional)</label>
-                  <input id="p-deaconess" name="deaconess" type="text" maxlength="100" autocomplete="off" list="dl-deaconess" placeholder="The leader assigned to mentor them" />
+                  <select id="p-deaconess" name="deaconess_id">
+                    <option value="">No deaconess assigned</option>
+                  </select>
+                  <div class="hint">The leader assigned to mentor them. Not in the list? <a href="deaconesses.html">Add her under Deaconesses</a>.</div>
+                  <div class="error"></div>
                 </div>
               </div>
               <datalist id="dl-residence"></datalist>
               <datalist id="dl-department"></datalist>
-              <datalist id="dl-deaconess"></datalist>
               <div class="field" data-field="membership_date">
                 <label for="p-date">Membership date (optional)</label>
                 <input id="p-date" name="membership_date" type="date" />

@@ -275,7 +275,7 @@ create table if not exists public.people (
   church_name text check (church_name is null or char_length(church_name) <= 150),
   department text check (department is null or char_length(department) <= 100),
   residence text check (residence is null or char_length(residence) <= 150),
-  deaconess text check (deaconess is null or char_length(deaconess) <= 100),
+  deaconess_id uuid,
   membership_type text not null default 'visitor'
     check (membership_type in ('incoming_commitment', 'in_commitment', 'member', 'visitor')),
   membership_date date,
@@ -321,15 +321,12 @@ end $$;
 
 alter table public.people add column if not exists department text;
 alter table public.people add column if not exists residence text;
-alter table public.people add column if not exists deaconess text;
 alter table public.people add column if not exists membership_type text not null default 'visitor';
 
 alter table public.people drop constraint if exists people_department_check;
 alter table public.people add constraint people_department_check check (department is null or char_length(department) <= 100);
 alter table public.people drop constraint if exists people_residence_check;
 alter table public.people add constraint people_residence_check check (residence is null or char_length(residence) <= 150);
-alter table public.people drop constraint if exists people_deaconess_check;
-alter table public.people add constraint people_deaconess_check check (deaconess is null or char_length(deaconess) <= 100);
 alter table public.people drop constraint if exists people_membership_type_check;
 alter table public.people add constraint people_membership_type_check
   check (membership_type in ('incoming_commitment', 'in_commitment', 'member', 'visitor'));
@@ -342,7 +339,53 @@ alter table public.people add constraint people_type_matches_kind
   check ((kind = 'visitor') = (membership_type = 'visitor'));
 
 create index if not exists people_department_idx on public.people (lower(department)) where department is not null;
-create index if not exists people_deaconess_idx on public.people (lower(deaconess)) where deaconess is not null;
+
+-- The deaconesses: the leaders assigned to mentor members, kept as a list by the administrator.
+create table if not exists public.deaconesses (
+  id uuid primary key default gen_random_uuid(),
+  name text not null check (char_length(btrim(name)) between 2 and 100),
+  phone text check (phone is null or phone ~ '^\+[0-9]{9,15}$'),
+  active boolean not null default true,
+  created_by text not null default 'system' check (char_length(created_by) <= 200),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create unique index if not exists deaconesses_name_uq on public.deaconesses (lower(btrim(name)));
+
+drop trigger if exists deaconesses_touch_updated_at on public.deaconesses;
+create trigger deaconesses_touch_updated_at
+  before update on public.deaconesses
+  for each row execute function private.touch_updated_at();
+
+alter table public.people add column if not exists deaconess_id uuid;
+alter table public.people drop constraint if exists people_deaconess_id_fkey;
+alter table public.people add constraint people_deaconess_id_fkey
+  foreign key (deaconess_id) references public.deaconesses (id) on delete restrict;
+drop index if exists public.people_deaconess_idx;  -- an older version indexed the text column under this name
+create index if not exists people_deaconess_idx on public.people (deaconess_id) where deaconess_id is not null;
+
+-- An earlier version stored the deaconess as typed text. Every distinct name becomes an
+-- entry in the list, the members are pointed at it, and the text column is removed.
+do $$
+begin
+  if exists (select 1 from information_schema.columns
+             where table_schema = 'public' and table_name = 'people' and column_name = 'deaconess') then
+    insert into public.deaconesses (name, created_by)
+    select distinct on (lower(btrim(p.deaconess))) btrim(p.deaconess), 'system:upgrade'
+    from public.people p
+    where p.deaconess is not null and btrim(p.deaconess) <> ''
+    order by lower(btrim(p.deaconess)), btrim(p.deaconess)
+    on conflict do nothing;
+
+    update public.people p
+    set deaconess_id = d.id
+    from public.deaconesses d
+    where p.deaconess_id is null and p.deaconess is not null
+      and lower(btrim(p.deaconess)) = lower(btrim(d.name));
+
+    alter table public.people drop column deaconess;
+  end if;
+end $$;
 
 -- ---------------------------------------------------------------------------
 -- registrations and attendance point at a person.

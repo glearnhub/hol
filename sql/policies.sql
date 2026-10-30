@@ -36,6 +36,7 @@ alter table public.attendance enable row level security;
 alter table public.volunteer_access enable row level security;
 alter table public.audit_log enable row level security;
 alter table public.people enable row level security;
+alter table public.deaconesses enable row level security;
 alter table public.attendance_corrections enable row level security;
 alter table private.rate_limits enable row level security;
 
@@ -98,6 +99,12 @@ create policy "Admins read volunteer links"
 drop policy if exists "Admins read people" on public.people;
 create policy "Admins read people"
   on public.people for select
+  to authenticated
+  using (public.is_admin());
+
+drop policy if exists "Admins read deaconesses" on public.deaconesses;
+create policy "Admins read deaconesses"
+  on public.deaconesses for select
   to authenticated
   using (public.is_admin());
 
@@ -172,11 +179,14 @@ grant execute on function public.staff_search_people(uuid, text) to authenticate
 grant execute on function public.admin_registration_link(uuid, text, timestamptz) to authenticated;
 grant execute on function public.admin_set_person_attendance(uuid, uuid, boolean, text) to authenticated;
 grant execute on function public.admin_find_duplicates(text, text, text, text, uuid) to authenticated;
-grant execute on function public.admin_create_member(text, text, text, text, text, date, text, text, text, boolean, text, text, text) to authenticated;
-grant execute on function public.admin_update_person(uuid, text, text, text, text, text, date, text, text, text, boolean, text, text, text) to authenticated;
+grant execute on function public.admin_create_member(text, text, text, text, text, date, text, text, text, boolean, text, uuid, text) to authenticated;
+grant execute on function public.admin_update_person(uuid, text, text, text, text, text, date, text, text, text, boolean, text, uuid, text) to authenticated;
 grant execute on function public.admin_set_person_status(uuid, text) to authenticated;
-grant execute on function public.admin_convert_visitor(uuid, text, text, text, text, text, date, text, text, text, text, text, text) to authenticated;
-grant execute on function public.admin_list_people(text, text, text, text, date, date, text, integer, integer, boolean, integer, text, text, text) to authenticated;
+grant execute on function public.admin_convert_visitor(uuid, text, text, text, text, text, date, text, text, text, text, uuid, text) to authenticated;
+grant execute on function public.admin_list_people(text, text, text, text, date, date, text, integer, integer, boolean, integer, text, text, uuid) to authenticated;
+grant execute on function public.admin_list_deaconesses() to authenticated;
+grant execute on function public.admin_save_deaconess(text, text, uuid, boolean) to authenticated;
+grant execute on function public.admin_delete_deaconess(uuid) to authenticated;
 grant execute on function public.admin_person_options() to authenticated;
 grant execute on function public.admin_get_person(uuid, integer) to authenticated;
 grant execute on function public.admin_event_attendance_report(uuid) to authenticated;

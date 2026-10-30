@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="robots" content="noindex" />
+    <title>Deaconesses · Handmaidens of the Lord</title>
+    <link rel="icon" type="image/png" sizes="64x64" href="img/favicon-64.png" />
+    <link rel="apple-touch-icon" href="img/apple-touch-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/styles.css" />
+    <link rel="stylesheet" href="css/admin.css" />
+  </head>
+  <body class="admin">
+    <div class="admin-layout">
+      <aside id="admin-sidebar" aria-label="Administration menu"></aside>
+      <div class="admin-content">
+        <header id="admin-topbar"></header>
+        <main id="page" class="hidden">
+          <div class="page-title">
+            <div>
+              <h1>Deaconesses</h1>
+              <div class="muted">The leaders assigned to mentor members. Add them here once; when you register or edit a member you simply choose one from this list.</div>
+            </div>
+            <div class="row-actions">
+              <button id="add-deaconess" class="btn btn-primary" type="button">+ Add deaconess</button>
+            </div>
+          </div>
+          <div id="status" aria-live="polite"></div>
+          <div id="stats" class="stats"></div>
+          <section class="panel">
+            <div id="table" class="table-wrap"></div>
+          </section>
+
+          <dialog id="dea-dialog" aria-labelledby="dea-title">
+            <div class="dialog-head">
+              <h2 id="dea-title">Add deaconess</h2>
+              <button class="btn btn-outline btn-small" type="button" data-close>Close</button>
+            </div>
+            <form id="dea-form" class="dialog-body" novalidate>
+              <div id="form-status" aria-live="polite"></div>
+              <div class="field" data-field="name">
+                <label for="d-name">Name</label>
+                <input id="d-name" name="name" type="text" maxlength="100" autocomplete="off" placeholder="For example Deaconess Grace Njeri" required />
+                <div class="error"></div>
+              </div>
+              <div class="field" data-field="phone">
+                <label for="d-phone">Phone number (optional)</label>
+                <input id="d-phone" name="phone" type="tel" inputmode="tel" autocomplete="off" placeholder="0712 345 678" />
+                <div class="error"></div>
+              </div>
+              <label id="active-box" class="check-inline"><input id="d-active" name="active" type="checkbox" checked /> Active: can be chosen for new members</label>
+              <p class="muted" style="margin:.25rem 0 1rem">Turning this off keeps her on the members she already mentors but stops her being offered for new ones.</p>
+              <div class="row-actions">
+                <button id="dea-submit" class="btn btn-primary" type="submit">Save deaconess</button>
+                <button class="btn btn-outline" type="button" data-close>Cancel</button>
+              </div>
+            </form>
+          </dialog>
+        </main>
+      </div>
+    </div>
+    <script type="module">
+      import { initDeaconesses } from './js/deaconesses.js'
+      initDeaconesses()
+    </script>
+  </body>
+</html>
