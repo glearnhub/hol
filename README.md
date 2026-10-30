@@ -410,6 +410,25 @@ everyone a particular deaconess mentors), search by any of these, sort by depart
 deaconess, and export them all to CSV. Departments and residences already in use
 are offered as suggestions while typing, so spelling stays consistent.
 
+### Importing members from a CSV file
+
+On the **Members** page, **Import CSV** opens a three-step screen:
+
+1. **Download the template** (`members-import-template.csv`). It has the columns Full name, Phone,
+   Alternative phone, Email, Gender, Membership type, Membership date, Residence, Department,
+   Deaconess, Church and Notes, and two sample rows that are ignored. Fill it in with Excel or
+   Google Sheets and save it as CSV (comma, semicolon or tab separated all work).
+2. **Choose the file.** It is checked at once and *nothing is saved*: every row is marked *will be
+   added*, *skipped* or *error*, with the reason and its line number. People whose phone number is
+   already registered are never added twice (the message says who has it, and points visitors to the
+   Visitors page); the same number twice in one file is caught; a similar name is held back for a
+   look unless you tick "import similar names anyway"; an unknown deaconess is an error unless you
+   tick "add deaconesses that are not in the list yet". Dates can be `2024-03-17` or `17/03/2024`.
+3. **Import.** The rows that passed are saved in one go and the page updates. You can download a
+   CSV of the rows that were not added, fix them, and import that file.
+
+Up to 2000 people per file. Only administrators can import.
+
 ### Events and their two links
 
 Every event has a **category**, a **visibility** (public, private or internal), and switches

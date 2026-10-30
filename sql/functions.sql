@@ -3136,3 +3136,222 @@ begin
   return jsonb_build_object('ok', true, 'results', results);
 end;
 $$;
+
+-- ---------------------------------------------------------------------------
+-- Bulk import of members (from a CSV the browser has already read into rows).
+-- The same rules as adding a member by hand apply to every row: a phone number that is
+-- already registered is never added again, similar names are held back for review, and
+-- anything wrong is reported against its row. With p_commit = false nothing is saved: it is
+-- the "check the file" preview. With p_commit = true the rows that passed are saved in one go.
+-- ---------------------------------------------------------------------------
+create or replace function private.import_membership_type(p text)
+returns text
+language sql
+immutable
+as $$
+  select case regexp_replace(lower(btrim(coalesce(p, ''))), '[^a-z]+', ' ', 'g')
+    when '' then null
+    when 'incoming commitment class' then 'incoming_commitment'
+    when 'incoming commitment' then 'incoming_commitment'
+    when 'incoming' then 'incoming_commitment'
+    when 'in commitment class' then 'in_commitment'
+    when 'in commitment' then 'in_commitment'
+    when 'commitment class' then 'in_commitment'
+    when 'member' then 'member'
+    when 'visitor' then 'visitor'
+    else regexp_replace(lower(btrim(p)), '[^a-z]+', ' ', 'g')
+  end
+$$;
+
+create or replace function public.admin_import_members(
+  p_rows jsonb,
+  p_commit boolean default false,
+  p_create_deaconesses boolean default false,
+  p_allow_similar boolean default false
+)
+returns jsonb
+language plpgsql
+security definer
+volatile
+set search_path = public, pg_temp
+as $$
+declare
+  r record;
+  f record;
+  v_results jsonb := '[]'::jsonb;
+  v_seen_phones text[] := '{}';
+  v_new_deaconesses text[] := '{}';
+  v_status text;
+  v_msg text;
+  v_label text;
+  v_line integer;
+  v_phone_out text;
+  v_gender text;
+  v_type text;
+  v_date date;
+  v_date_text text;
+  v_dea_name text;
+  v_dea_id uuid;
+  v_dea public.deaconesses;
+  v_existing public.people;
+  v_dupes jsonb;
+  v_person public.people;
+  n_new integer := 0;
+  n_skipped integer := 0;
+  n_error integer := 0;
+begin
+  perform private.require_admin();
+
+  if p_rows is null or jsonb_typeof(p_rows) <> 'array' then
+    return private.fail('invalid_rows', 'The file could not be read.');
+  end if;
+  if jsonb_array_length(p_rows) = 0 then
+    return private.fail('empty', 'The file has no people in it.');
+  end if;
+  if jsonb_array_length(p_rows) > 2000 then
+    return private.fail('too_many_rows', 'Import at most 2000 people at a time. Split the file and import it in parts.');
+  end if;
+
+  for r in select value as v, ordinality as n from jsonb_array_elements(p_rows) with ordinality loop
+    v_status := 'new';
+    v_msg := null;
+    v_label := null;
+    v_dea_id := null;
+    v_phone_out := r.v ->> 'phone';
+    v_line := coalesce(nullif(r.v ->> 'line', '')::integer, r.n::integer + 1);
+
+    begin
+      -- Friendly spellings of gender and membership type
+      v_gender := case lower(btrim(coalesce(r.v ->> 'gender', '')))
+        when '' then null
+        when 'f' then 'female' when 'female' then 'female' when 'woman' then 'female'
+        when 'm' then 'male' when 'male' then 'male' when 'man' then 'male'
+        else lower(btrim(r.v ->> 'gender')) end;
+      v_type := private.import_membership_type(r.v ->> 'membership_type');
+
+      select * into f from private.validate_person_fields(
+        r.v ->> 'full_name', r.v ->> 'phone', r.v ->> 'alt_phone', r.v ->> 'email', v_gender,
+        r.v ->> 'department', r.v ->> 'church', r.v ->> 'notes', r.v ->> 'residence', v_type);
+
+      -- (a blank phone normalises to a bare "+", which is not worth showing)
+      v_phone_out := case when f.v_phone = '+' then null else coalesce(f.v_phone, v_phone_out) end;
+      v_date := null;
+      v_date_text := nullif(btrim(coalesce(r.v ->> 'membership_date', '')), '');
+
+      if f.v_error is not null then
+        v_status := 'error';
+        v_msg := f.v_error ->> 'message';
+      elsif f.v_type = 'visitor' then
+        v_status := 'error';
+        v_msg := 'This import is for members. Use Incoming Commitment Class, In Commitment Class or Member, or leave the type blank.';
+      elsif v_date_text is not null and v_date_text !~ '^\d{4}-\d{2}-\d{2}$' then
+        v_status := 'error';
+        v_msg := format('The membership date "%s" is not a date. Use year-month-day, for example 2024-03-17.', v_date_text);
+      end if;
+
+      if v_status = 'new' and v_date_text is not null then
+        begin
+          v_date := v_date_text::date;
+        exception when others then
+          v_status := 'error';
+          v_msg := format('The membership date "%s" is not a real date.', v_date_text);
+        end;
+      end if;
+
+      -- The deaconess is looked up by name in the list
+      v_dea_name := private.clean_text(r.v ->> 'deaconess', 100);
+      if v_status = 'new' and v_dea_name is not null then
+        select * into v_dea from public.deaconesses where lower(btrim(name)) = lower(v_dea_name);
+        if found then
+          if not v_dea.active then
+            v_status := 'error';
+            v_msg := format('Deaconess "%s" is inactive, so she cannot be given new members.', v_dea.name);
+          else
+            v_dea_id := v_dea.id;
+          end if;
+        elsif p_create_deaconesses then
+          if not (lower(v_dea_name) = any (select lower(x) from unnest(v_new_deaconesses) x)) then
+            v_new_deaconesses := array_append(v_new_deaconesses, v_dea_name);
+          end if;
+        else
+          v_status := 'error';
+          v_msg := format('Deaconess "%s" is not in the list. Add her under Deaconesses first, or tick the option to add new deaconesses.', v_dea_name);
+        end if;
+      end if;
+
+      -- Phone numbers are never registered twice
+      if v_status = 'new' then
+        if f.v_phone = any (v_seen_phones) then
+          v_status := 'skipped';
+          v_msg := 'The same phone number appears earlier in this file.';
+        else
+          select * into v_existing from public.people where phone = f.v_phone or alt_phone = f.v_phone;
+          if found then
+            v_status := 'skipped';
+            v_msg := case when v_existing.kind = 'visitor'
+              then format('%s (%s) is already on record as a visitor. Convert them on the Visitors page.', v_existing.full_name, private.person_label(v_existing))
+              else format('%s (%s) is already registered with this phone number.', v_existing.full_name, private.person_label(v_existing)) end;
+          end if;
+        end if;
+      end if;
+
+      -- A similar name or the same email: held back unless the administrator says otherwise
+      if v_status = 'new' and not coalesce(p_allow_similar, false) then
+        v_dupes := private.possible_duplicates(f.v_name, f.v_phone, f.v_alt, f.v_email);
+        if jsonb_array_length(v_dupes) > 0 then
+          v_status := 'skipped';
+          v_msg := format('Possible duplicate of %s (%s). Check them, or tick "import similar names anyway".',
+                          v_dupes -> 0 ->> 'full_name', v_dupes -> 0 ->> 'label');
+        end if;
+      end if;
+
+      -- Remember the numbers this file will add, so the same number twice is caught
+      if v_status = 'new' then
+        v_seen_phones := array_append(v_seen_phones, f.v_phone);
+      end if;
+
+      if v_status = 'new' and p_commit then
+        if v_dea_name is not null and v_dea_id is null then
+          select id into v_dea_id from public.deaconesses where lower(btrim(name)) = lower(v_dea_name);
+          if v_dea_id is null then
+            insert into public.deaconesses (name, created_by) values (v_dea_name, 'admin:' || auth.uid()::text)
+            returning id into v_dea_id;
+          end if;
+        end if;
+        insert into public.people
+          (kind, membership_type, full_name, phone, alt_phone, email, gender, membership_date, department,
+           residence, deaconess_id, church_name, notes, created_by)
+        values
+          ('member', coalesce(f.v_type, 'member'), f.v_name, f.v_phone, f.v_alt, f.v_email, f.v_gender,
+           coalesce(v_date, (now() at time zone private.event_tz())::date),
+           f.v_department, f.v_residence, v_dea_id, f.v_church, f.v_notes, 'admin:' || auth.uid()::text)
+        returning * into v_person;
+        v_label := private.person_label(v_person);
+      end if;
+    exception when others then
+      v_status := 'error';
+      v_msg := 'This row could not be saved: ' || sqlerrm;
+    end;
+
+    if v_status = 'new' then n_new := n_new + 1;
+    elsif v_status = 'skipped' then n_skipped := n_skipped + 1;
+    else n_error := n_error + 1;
+    end if;
+
+    v_results := v_results || jsonb_build_array(jsonb_build_object(
+      'row', v_line, 'name', private.clean_text(r.v ->> 'full_name', 100),
+      'phone', v_phone_out, 'status', v_status, 'message', v_msg, 'label', v_label));
+  end loop;
+
+  if p_commit then
+    perform private.audit('admin:' || auth.uid()::text, 'members_imported', null,
+      jsonb_build_object('imported', n_new, 'skipped', n_skipped, 'errors', n_error));
+  end if;
+
+  return jsonb_build_object(
+    'ok', true, 'committed', coalesce(p_commit, false),
+    'counts', jsonb_build_object('total', jsonb_array_length(p_rows), 'new', n_new, 'skipped', n_skipped, 'errors', n_error),
+    'new_deaconesses', to_jsonb(v_new_deaconesses),
+    'rows', v_results);
+end;
+$$;

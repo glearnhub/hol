@@ -7,6 +7,7 @@
 import { supabase } from './supabase-client.js'
 import { requireAdmin } from './admin-auth.js'
 import { callRpc, errorText, kindBadge, MEMBERSHIP_TYPES, membershipBadge, membershipTypeLabel } from './admin-common.js'
+import { initImport } from './people-import.js'
 import { el, $, setChildren, formatDate, formatDateTime, notice, toast, toCsv, downloadFile, debounce, slug } from './ui.js'
 
 const PAGE_SIZE = 20
@@ -559,6 +560,11 @@ export async function initPeople(mode) {
   $('#person-form').addEventListener('submit', (e) => { e.preventDefault(); submitForm(false) })
   for (const id of ['#p-name', '#p-phone', '#p-alt', '#p-email']) $(id).addEventListener('input', checkDuplicates)
 
+  // Members can be imported from a CSV file (the Visitors page has no import).
+  if (MODE === 'member' && $('#import-btn')) {
+    initImport({ onImported: () => Promise.all([loadPage(), refreshStats(), loadOptions()]) })
+  }
+
   await Promise.all([loadPage(), refreshStats(), loadOptions()])
 }
 
@@ -583,7 +589,9 @@ async function loadOptions() {
     const fill = (id, values) => $(id).replaceChildren(...values.map((v) => el('option', { value: v })))
     fill('#dl-department', o.departments)
     fill('#dl-residence', o.residences)
-    $('#f-department').append(...o.departments.map((d) => el('option', { value: d }, d)))
+    const keepDept = $('#f-department').value
+    $('#f-department').replaceChildren(el('option', { value: '' }, 'All departments'), ...o.departments.map((d) => el('option', { value: d }, d)))
+    $('#f-department').value = keepDept
     // The deaconess list: filter choices on the page, and the choices in the form.
     const dl = await callRpc('admin_list_deaconesses')
     deaconesses = dl.rows

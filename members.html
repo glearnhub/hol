@@ -26,6 +26,7 @@
             </div>
             <div class="row-actions">
               <button id="add-person" class="btn btn-primary " type="button">+ Add member</button>
+              <button id="import-btn" class="btn btn-outline" type="button">Import CSV</button>
               <button id="export" class="btn btn-outline" type="button">Export CSV</button>
             </div>
           </div>
@@ -204,6 +205,51 @@
                 <button class="btn btn-outline" type="button" data-close>Cancel</button>
               </div>
             </form>
+          </dialog>
+
+          <dialog id="import-dialog" class="wide-dialog" aria-labelledby="import-title">
+            <div class="dialog-head">
+              <h2 id="import-title">Import members from a CSV file</h2>
+              <button class="btn btn-outline btn-small" type="button" data-close>Close</button>
+            </div>
+            <div class="dialog-body">
+              <ol class="import-steps">
+                <li>
+                  <strong>Download the template</strong> and fill in one person per row. Open it in Excel or Google Sheets and save it as <em>CSV</em> when you are done.
+                  <div style="margin:.5rem 0"><button id="imp-template" class="btn btn-primary btn-small" type="button">Download the template</button></div>
+                  <details class="import-help">
+                    <summary>What goes in each column</summary>
+                    <ul>
+                      <li><strong>Full name</strong> and <strong>Phone</strong> are required. <code>0712 345 678</code>, <code>712345678</code> and <code>+254712345678</code> are the same number.</li>
+                      <li><strong>Membership type</strong>: <em>Incoming Commitment Class</em>, <em>In Commitment Class</em> or <em>Member</em>. Leave blank for Member.</li>
+                      <li><strong>Gender</strong>: Female, Male or Other (F and M also work). <strong>Membership date</strong>: <code>2024-03-17</code> or <code>17/03/2024</code>; blank means today.</li>
+                      <li><strong>Deaconess</strong>: her name exactly as it is in the Deaconesses list (capital letters do not matter).</li>
+                      <li>Residence, Department, Alternative phone, Email, Church and Notes are optional.</li>
+                      <li>The two sample rows in the template are ignored, so you can leave them in.</li>
+                    </ul>
+                  </details>
+                </li>
+                <li>
+                  <strong>Choose your file.</strong> It is checked straight away and <em>nothing is saved yet</em>.
+                  <div class="field" style="margin:.5rem 0">
+                    <input id="imp-file" type="file" accept=".csv,text/csv,text/plain" />
+                    <div id="imp-file-note" class="hint"></div>
+                  </div>
+                  <label class="check-inline"><input id="imp-create-dea" type="checkbox" /> Add deaconesses that are not in the list yet</label>
+                  <label class="check-inline"><input id="imp-allow-similar" type="checkbox" /> Import rows with a similar name anyway (otherwise they are held back to check)</label>
+                  <label class="check-inline"><input id="imp-show-all" type="checkbox" /> Show every row, not only the problems</label>
+                </li>
+                <li>
+                  <strong>Look at the result, then import.</strong> People who are already registered are never added twice.
+                </li>
+              </ol>
+              <div id="imp-result" aria-live="polite"></div>
+              <div class="row-actions" style="margin-top:1rem">
+                <button id="imp-go" class="btn btn-primary" type="button" disabled>Import members</button>
+                <button id="imp-report" class="btn btn-outline hidden" type="button">Download the rows that were not added</button>
+                <button class="btn btn-outline" type="button" data-close>Close</button>
+              </div>
+            </div>
           </dialog>
 
           <dialog id="profile-dialog" aria-labelledby="profile-title">

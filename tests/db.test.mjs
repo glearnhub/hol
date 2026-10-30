@@ -1011,6 +1011,83 @@ check('event links (secret tokens) cannot be read through the API',
   await denied(() => as('authenticated', () => db.query('select token_plain from public.volunteer_access'), { uid: adminId })))
 
 
+
+// ---- 8.9 Importing members from a file -------------------------------------------------------------------
+const importRows = [
+  { line: 2, full_name: 'Import One', phone: '0777 000 001', membership_type: 'In Commitment Class', gender: 'F', deaconess: 'Deaconess Grace', department: 'Choir', residence: 'Rongai', membership_date: '2024-03-17', email: 'one@example.com' },
+  { line: 3, full_name: 'Import Two', phone: '777000002' },
+  { line: 4, full_name: 'No Phone Person', phone: '' },
+  { line: 5, full_name: 'Bad Email Person', phone: '0777 000 003', email: 'not-an-email' },
+  { line: 6, full_name: 'Already Here', phone: '+254702499324' },
+  { line: 7, full_name: 'Import One Again', phone: '0777000001' },
+  { line: 8, full_name: 'Unknown Deaconess Person', phone: '0777 000 004', deaconess: 'Deaconess Nobody' },
+  { line: 9, full_name: 'Odd Type Person', phone: '0777 000 005', membership_type: 'VIP' },
+  { line: 10, full_name: 'Visitor Type Person', phone: '0777 000 006', membership_type: 'Visitor' },
+  { line: 11, full_name: 'Bad Date Person', phone: '0777 000 007', membership_date: '17/03/2024' },
+  { line: 12, full_name: 'Esther Kamau', phone: '0777 000 008' },
+  { line: 13, full_name: 'Odd Gender Person', phone: '0777 000 009', gender: 'x' },
+  { line: 14, full_name: 'Known Visitor', phone: '0755 666 777' },
+]
+const peopleCount = async () => (await db.query('select count(*)::int n from public.people')).rows[0].n
+const before = await peopleCount()
+const dry = await A('admin_import_members', { p_rows: importRows })
+const byLine = (res, line) => res.rows.find((r) => r.row === line)
+check('checking the file shows what would happen without saving anything',
+  dry.ok && dry.committed === false && (await peopleCount()) === before, JSON.stringify(dry.counts))
+check('good rows are accepted, including friendly spellings (type name, F for female, 9-digit phone)',
+  byLine(dry, 2).status === 'new' && byLine(dry, 3).status === 'new', JSON.stringify([byLine(dry, 2), byLine(dry, 3)]))
+check('a row without a phone number is reported as an error, with its line', byLine(dry, 4).status === 'error' && /phone/i.test(byLine(dry, 4).message))
+check('an invalid email is reported as an error', byLine(dry, 5).status === 'error' && /email/i.test(byLine(dry, 5).message))
+check('a phone number already registered is skipped, naming who has it',
+  byLine(dry, 6).status === 'skipped' && /Esther Wambui Kamau/.test(byLine(dry, 6).message), byLine(dry, 6).message)
+check('the same phone twice in one file is caught', byLine(dry, 7).status === 'skipped' && /earlier in this file/.test(byLine(dry, 7).message))
+check('an unknown deaconess is an error unless new ones may be added', byLine(dry, 8).status === 'error' && /Deaconess Nobody/.test(byLine(dry, 8).message))
+check('an unknown membership type is an error', byLine(dry, 9).status === 'error')
+check('the type Visitor is refused (this import is for members)', byLine(dry, 10).status === 'error' && /members/i.test(byLine(dry, 10).message))
+check('a date that is not year-month-day is an error that says how to fix it', byLine(dry, 11).status === 'error' && /year-month-day/.test(byLine(dry, 11).message))
+check('a similar name is held back for review, not imported silently', byLine(dry, 12).status === 'skipped' && /Possible duplicate/.test(byLine(dry, 12).message))
+check('an unknown gender is an error', byLine(dry, 13).status === 'error')
+check('an existing visitor is pointed to the Visitors page', byLine(dry, 14).status === 'skipped' && /Visitors page/.test(byLine(dry, 14).message))
+check('the counts add up', dry.counts.total === 13 && dry.counts.new === 2 && dry.counts.new + dry.counts.skipped + dry.counts.errors === 13, JSON.stringify(dry.counts))
+
+const done = await A('admin_import_members', { p_rows: importRows, p_commit: true })
+check('importing saves exactly the good rows', done.committed === true && done.counts.new === 2 && (await peopleCount()) === before + 2)
+const imp1 = (await db.query(`select *, membership_date::text as md from public.people where phone = '+254777000001'`)).rows[0]
+check('everything in the row is stored (type, gender, deaconess, department, residence, date)',
+  imp1.kind === 'member' && imp1.membership_type === 'in_commitment' && imp1.gender === 'female' && imp1.deaconess_id === dGrace
+  && imp1.department === 'Choir' && imp1.residence === 'Rongai' && imp1.md === '2024-03-17' && imp1.email === 'one@example.com')
+const imp2 = (await db.query(`select kind, membership_type, membership_date from public.people where phone = '+254777000002'`)).rows[0]
+check('a blank type means Member and a blank date means today',
+  imp2.membership_type === 'member' && imp2.membership_date !== null)
+check('each imported person gets a member number', /^M-\d{5}$/.test(byLine(done, 2).label))
+check('the import is recorded in the audit log',
+  (await db.query(`select details from public.audit_log where action = 'members_imported' order by id desc limit 1`)).rows[0].details.imported === 2)
+const importAgain = await A('admin_import_members', { p_rows: importRows, p_commit: true })
+check('importing the same file again adds nobody (nothing is duplicated)', importAgain.counts.new === 0 && (await peopleCount()) === before + 2)
+
+const withNew = await A('admin_import_members', { p_rows: [{ line: 2, full_name: 'Brand New Deaconess Member', phone: '0777 000 020', deaconess: 'Deaconess Brand New' }], p_create_deaconesses: true })
+check('the check says which deaconesses would be added', withNew.counts.new === 1 && withNew.new_deaconesses.includes('Deaconess Brand New')
+  && !(await A('admin_list_deaconesses', {})).rows.some((d) => d.name === 'Deaconess Brand New'))
+await A('admin_import_members', { p_rows: [{ line: 2, full_name: 'Brand New Deaconess Member', phone: '0777 000 020', deaconess: 'Deaconess Brand New' }], p_create_deaconesses: true, p_commit: true })
+const newDea = (await A('admin_list_deaconesses', {})).rows.find((d) => d.name === 'Deaconess Brand New')
+check('new deaconesses are added to the list when allowed, and the member is linked to her', newDea && newDea.members === 1)
+
+const similar = await A('admin_import_members', { p_rows: [{ line: 2, full_name: 'Esther Kamau', phone: '0777 000 008' }], p_allow_similar: true, p_commit: true })
+check('similar names can be imported on purpose', similar.counts.new === 1)
+const dInactive = (await A('admin_save_deaconess', { p_name: 'Deaconess Inactive Import' })).id
+await A('admin_save_deaconess', { p_id: dInactive, p_name: 'Deaconess Inactive Import', p_active: false })
+check('an inactive deaconess cannot be given new members through the import',
+  byLine(await A('admin_import_members', { p_rows: [{ line: 2, full_name: 'Inactive Link Person', phone: '0777 000 021', deaconess: 'deaconess inactive import' }] }), 2).status === 'error')
+
+check('an empty file is refused', (await A('admin_import_members', { p_rows: [] })).error === 'empty')
+check('more than 2000 people at once is refused with advice',
+  (await A('admin_import_members', { p_rows: Array.from({ length: 2001 }, (_, i) => ({ full_name: 'Bulk ' + i, phone: '0788 ' + String(100000 + i) })) })).error === 'too_many_rows')
+check('an import can hold up to 2000 people',
+  (await A('admin_import_members', { p_rows: Array.from({ length: 2000 }, (_, i) => ({ full_name: 'Bulk' + i + ' Person' + i, phone: '+254799' + String(100000 + i) })) })).counts.new === 2000)
+check('the import is for administrators only', await denied(() => M('admin_import_members', { p_rows: importRows })))
+check('the import is not public', await denied(() => as('anon', () => rpc('admin_import_members', { p_rows: importRows }))))
+check('imported members are found by ushers like any other',
+  (await U('volunteer_search_people', { p_token: ushTok, p_query: 'Import Two' }, '10.8.9.9')).results.some((r) => r.full_name === 'Import Two'))
 }
 console.log(`\n${passed} passed, ${failed} failed`)
 process.exit(failed ? 1 : 0)
