@@ -1,2 +1,5 @@
 node_modules
 tests/.dev-info.json
+
+# Real member data: never commit
+data/
