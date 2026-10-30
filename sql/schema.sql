@@ -319,6 +319,27 @@ alter table public.attendance add constraint attendance_method_check
   check (method in ('qr', 'search', 'code', 'admin', 'walkin'));
 
 -- ---------------------------------------------------------------------------
+-- attendance_corrections: what was removed or added by hand, by whom and why.
+-- Removing someone's attendance keeps a full copy here.
+-- ---------------------------------------------------------------------------
+create table if not exists public.attendance_corrections (
+  id bigint generated always as identity primary key,
+  at timestamptz not null default now(),
+  actor text not null,
+  action text not null check (action in ('removed', 'added')),
+  event_id uuid not null,
+  person_id uuid,
+  registration_id uuid,
+  classification text,
+  method text,
+  original_checked_in_at timestamptz,
+  original_checked_in_by text,
+  reason text check (reason is null or char_length(reason) <= 300)
+);
+
+create index if not exists attendance_corrections_event_idx on public.attendance_corrections (event_id, at desc);
+
+-- ---------------------------------------------------------------------------
 -- One-off link-up of existing data: every distinct phone number among the old
 -- registrations becomes one visitor, and their registrations and attendance are
 -- attached to it. Nothing is deleted or changed otherwise.
@@ -363,6 +384,31 @@ end $$;
 create index if not exists registrations_person_idx on public.registrations (person_id);
 create index if not exists attendance_person_idx on public.attendance (person_id);
 
+-- Older data can hold two attendance rows for the same person at the same event (for
+-- example one phone number registered twice and both registrations checked in). A person
+-- counts once per event, so the EARLIEST check-in is kept and each extra row is copied to
+-- attendance_corrections (nothing is lost) before it is removed.
+do $$
+begin
+  with ranked as (
+    select a.*, row_number() over (partition by a.event_id, a.person_id order by a.checked_in_at, a.id) as rn
+    from public.attendance a
+    where a.person_id is not null
+  ), extra as (
+    select * from ranked where rn > 1
+  ), logged as (
+    insert into public.attendance_corrections
+      (actor, action, event_id, person_id, registration_id, classification, method,
+       original_checked_in_at, original_checked_in_by, reason)
+    select 'system:upgrade', 'removed', e.event_id, e.person_id, e.registration_id, e.classification, e.method,
+           e.checked_in_at, e.checked_in_by,
+           'Duplicate attendance for the same person at the same event, merged during the upgrade'
+    from extra e
+    returning 1
+  )
+  delete from public.attendance a using extra x where a.id = x.id;
+end $$;
+
 -- One attendance record per person per event, however it was recorded.
 create unique index if not exists attendance_event_person_uq on public.attendance (event_id, person_id);
 
@@ -385,24 +431,3 @@ alter table public.volunteer_access alter column expires_at drop not null;
 create unique index if not exists volunteer_access_one_registration_link_uq
   on public.volunteer_access (event_id)
   where kind = 'registration' and revoked_at is null;
-
--- ---------------------------------------------------------------------------
--- attendance_corrections: what was removed or added by hand, by whom and why.
--- Removing someone's attendance keeps a full copy here.
--- ---------------------------------------------------------------------------
-create table if not exists public.attendance_corrections (
-  id bigint generated always as identity primary key,
-  at timestamptz not null default now(),
-  actor text not null,
-  action text not null check (action in ('removed', 'added')),
-  event_id uuid not null,
-  person_id uuid,
-  registration_id uuid,
-  classification text,
-  method text,
-  original_checked_in_at timestamptz,
-  original_checked_in_by text,
-  reason text check (reason is null or char_length(reason) <= 300)
-);
-
-create index if not exists attendance_corrections_event_idx on public.attendance_corrections (event_id, at desc);

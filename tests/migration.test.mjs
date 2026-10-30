@@ -89,6 +89,15 @@ const link = await as('authenticated', () => rpc('admin_create_volunteer_link', 
 const ci = await as('anon', () => rpc('volunteer_check_in_qr', { p_token: link.token, p_code: rGrace1.qr_token }), { ip: '10.1.0.9' })
 console.log('Old data ready:', JSON.stringify({ checkedIn: ci.result }))
 
+// Real databases can hold something the current rules would not allow: the same phone number
+// registered twice for one event, with both registrations checked in (the duplicate rule is
+// newer). The upgrade must cope with it and lose nothing.
+await db.exec('drop index if exists public.registrations_event_phone_active_uq')
+const dupReg = (await db.query(
+  `insert into public.registrations (event_id, full_name, email, phone, church_name, registration_reference, qr_token_hash, consented_at)
+   values ($1, 'Grace W', null, '+254712000001', 'Grace Chapel', 'HOL-DUPE0001', 'dupehash0001', now()) returning id`, [e1])).rows[0].id
+await db.query(`insert into public.attendance (registration_id, event_id, method, checked_in_by) values ($1, $2, 'admin', 'test')`, [dupReg, e1])
+
 const before = {
   registrations: (await db.query('select count(*)::int n from public.registrations')).rows[0].n,
   attendance: (await db.query('select count(*)::int n from public.attendance')).rows[0].n,
@@ -105,7 +114,12 @@ for (let i = 0; i < 2; i++) {
 console.log('\nUpgrade checks')
 const q = async (text, params) => (await db.query(text, params)).rows
 check('no registration was lost', (await q('select count(*)::int n from public.registrations'))[0].n === before.registrations)
-check('no attendance record was lost', (await q('select count(*)::int n from public.attendance'))[0].n === before.attendance)
+check('a person counted twice at one event is counted once (the extra check-in is merged)',
+  (await q('select count(*)::int n from public.attendance'))[0].n === before.attendance - 1, String(before.attendance))
+check('...and the merged check-in is kept in the correction history, not lost',
+  (await q(`select count(*)::int n from public.attendance_corrections where actor = 'system:upgrade' and action = 'removed'`))[0].n === 1)
+check('one attendance row per person per event',
+  (await q('select count(*)::int n from (select 1 from public.attendance group by event_id, person_id having count(*) > 1) d'))[0].n === 0)
 check('one person per distinct phone number', (await q('select count(*)::int n from public.people'))[0].n === before.distinctPhones, JSON.stringify(await q('select phone, full_name from public.people')))
 check('the same person at two events is one profile',
   (await q(`select count(distinct person_id)::int n from public.registrations where phone = '+254712000001'`))[0].n === 1)
@@ -130,7 +144,7 @@ const listing = await as('anon', () => db.query('select id from public.public_ev
 check('the public still sees the old events', listing.rows.length === 2)
 
 // the old link still works with the new functions, and the old data shows up
-const search = await as('anon', () => rpc('volunteer_search_people', { p_token: link.token, p_query: 'wanjiku' }), { ip: '10.1.1.1' })
+const search = await as('anon', () => rpc('volunteer_search_people', { p_token: link.token, p_query: 'grace' }), { ip: '10.1.1.1' })
 check('the old check-in link works with the new search',
   search.ok && search.results.length === 1 && search.results[0].checked_in === true && search.results[0].kind === 'visitor', JSON.stringify(search))
 const joy = (await q(`select id from public.people where full_name = 'Joy Akinyi'`))[0].id
@@ -140,16 +154,16 @@ check('...and it is linked to their old registration',
   (await q(`select registration_id is not null as r from public.attendance where person_id = $1`, [joy]))[0].r === true)
 const list = await as('authenticated', () => rpc('admin_list_registrations', { p_event_id: e1 }), { uid: adminId })
 check('the old registrations list still works and shows who is present',
-  list.ok && list.total === 2 && list.rows.filter((r) => r.checked_in_at).length === 2 && list.rows.every((r) => r.classification === 'visitor'))
+  list.ok && list.total === 3 && list.rows.filter((r) => r.checked_in_at).length === 2 && list.rows.every((r) => r.classification === 'visitor'))
 const rep = await as('authenticated', () => rpc('admin_event_attendance_report', { p_event_id: e1 }), { uid: adminId })
 check('the new event report works on migrated data', rep.ok && rep.totals.attended_visitors === 2 && rep.totals.attended_members === 0, JSON.stringify(rep.totals))
 const grace = (await q(`select id from public.people where phone = '+254712000001'`))[0].id
 const conv = await as('authenticated', () => rpc('admin_convert_visitor', { p_id: grace, p_full_name: 'Grace Wanjiku', p_phone: '0712000001' }), { uid: adminId })
-check('a migrated visitor can be converted without losing history', conv.ok && conv.registrations_kept === 2 && conv.attendance_kept === 1, JSON.stringify(conv))
+check('a migrated visitor can be converted without losing history', conv.ok && conv.registrations_kept === 3 && conv.attendance_kept === 1, JSON.stringify(conv))
 const rep2 = await as('authenticated', () => rpc('admin_event_attendance_report', { p_event_id: e1 }), { uid: adminId })
 check('and the old event still lists them as a visitor', rep2.attended_visitors.some((v) => v.person_id === grace && v.now_member === true))
 const stats = await as('authenticated', () => rpc('admin_dashboard_stats', {}), { uid: adminId })
-check('dashboard figures are unchanged for old data', stats.total_registrations === 3 && stats.total_members === 1 && stats.total_visitors === 2, JSON.stringify(stats))
+check('dashboard figures are unchanged for old data', stats.total_registrations === 4 && stats.total_members === 1 && stats.total_visitors === 2, JSON.stringify(stats))
 
 console.log(`\n${passed} passed, ${failed} failed`)
 process.exit(failed ? 1 : 0)

@@ -441,7 +441,7 @@ never database IDs, and the table that holds them cannot be read through the web
    `sql/policies.sql`. All three can be run again safely.
 3. The upgrade links old data automatically: every distinct phone number among the old
    registrations becomes one **visitor**, and old registrations and attendance are attached to
-   it. Nothing is deleted. Convert regular people to members on the *Visitors* page. Existing
+   it. Nothing is deleted, with one tidy-up: if the same phone number was registered twice for one event and both were checked in, the person is counted once (the earliest check-in is kept) and the extra one is copied to `attendance_corrections` with the actor `system:upgrade`. Convert regular people to members on the *Visitors* page. Existing
    events become public events with both links created.
 4. Deploy the website code (push to the repository; Vercel deploys it).
 
