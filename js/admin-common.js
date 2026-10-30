@@ -57,6 +57,23 @@ export const VISIBILITY = {
   internal: { label: 'Internal', hint: 'Never listed. For leadership and member meetings.' },
 }
 
+// The four membership types, in the order they are offered.
+export const MEMBERSHIP_TYPES = {
+  incoming_commitment: 'Incoming Commitment Class',
+  in_commitment: 'In Commitment Class',
+  member: 'Member',
+  visitor: 'Visitor',
+}
+
+export function membershipTypeLabel(type) {
+  return MEMBERSHIP_TYPES[type] || 'Member'
+}
+
+export function membershipBadge(type) {
+  const tone = type === 'member' ? 'success' : type === 'visitor' ? 'info' : 'warning'
+  return el('span', { class: `badge badge-${tone}` }, membershipTypeLabel(type))
+}
+
 // "Member" / "Visitor" label that stays the same wherever it appears.
 export function kindBadge(kind) {
   return kind === 'member'

@@ -18,6 +18,16 @@ let busy = false
 let lastCode = { value: '', at: 0 }
 let allowWalkins = false
 
+const TYPE_LABELS = {
+  incoming_commitment: 'Incoming Commitment Class',
+  in_commitment: 'In Commitment Class',
+  member: 'Member',
+  visitor: 'Visitor',
+}
+// What the usher sees under a name: the membership type, and whether a visitor registered.
+const typeLabel = (p) =>
+  p.kind === 'visitor' ? (p.registered ? 'Visitor (registered)' : 'Visitor') : TYPE_LABELS[p.membership_type] || 'Member'
+
 // ---------------------------------------------------------------------------
 function showResult(kind, title, detail = '') {
   result.className = `ci-result ${kind}`
@@ -293,7 +303,7 @@ function renderMatches(rows) {
           'span',
           {},
           el('span', { class: 'who' }, p.full_name),
-          el('div', { class: 'phone' }, `${p.phone_hint} · ${p.kind === 'member' ? 'Member' : p.registered ? 'Visitor (registered)' : 'Visitor'}`)
+          el('div', { class: 'phone' }, `${p.phone_hint} · ${typeLabel(p)}`)
         ),
         p.checked_in
           ? el('span', { class: 'badge badge-success' }, 'Present')
@@ -308,7 +318,7 @@ function confirmPerson(p) {
   box.replaceChildren(
     el('p', { class: 'muted', style: 'margin:0' }, 'Confirm this is the right person:'),
     el('p', { class: 'confirm-name' }, p.full_name),
-    el('p', { class: 'muted' }, `${p.kind === 'member' ? 'Member' : 'Visitor'} · ${p.label} · phone ${p.phone_hint}`),
+    el('p', { class: 'muted' }, `${typeLabel(p)} · ${p.label} · phone ${p.phone_hint}`),
     p.checked_in
       ? el('div', { class: 'notice notice-warning' }, `This person has already been marked present for this event (at ${formatDateTime(p.checked_in_at)}).`)
       : el(

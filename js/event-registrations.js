@@ -1,6 +1,6 @@
 // Participant list for one event: search, filter, sort, paginate, export, mark present.
 import { requireAdmin } from './admin-auth.js'
-import { callRpc, attendanceBadge, attendanceLabel, errorText, kindBadge } from './admin-common.js'
+import { callRpc, attendanceBadge, attendanceLabel, errorText, kindBadge, membershipBadge } from './admin-common.js'
 import {
   el, $, param, isUuid, formatDate, formatTimeRange, formatDateTime, notice, toast, toCsv, downloadFile,
   debounce, slug,
@@ -196,7 +196,7 @@ async function searchPeople() {
               'tr',
               {},
               el('td', {}, el('strong', {}, p.full_name), el('div', { class: 'muted' }, p.label)),
-              el('td', {}, kindBadge(p.kind)),
+              el('td', {}, membershipBadge(p.membership_type)),
               el('td', {}, p.phone),
               el('td', {}, p.registered ? 'Yes' : 'No'),
               el('td', {}, p.checked_in ? el('span', { class: 'badge badge-success' }, `Present ${formatDateTime(p.checked_in_at)}`) : el('span', { class: 'badge badge-muted' }, 'Not present')),

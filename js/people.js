@@ -6,13 +6,13 @@
 // that checks the user's role again.
 import { supabase } from './supabase-client.js'
 import { requireAdmin } from './admin-auth.js'
-import { callRpc, errorText, kindBadge } from './admin-common.js'
+import { callRpc, errorText, kindBadge, MEMBERSHIP_TYPES, membershipBadge, membershipTypeLabel } from './admin-common.js'
 import { el, $, setChildren, formatDate, formatDateTime, notice, toast, toCsv, downloadFile, debounce, slug } from './ui.js'
 
 const PAGE_SIZE = 20
 
 let MODE = 'member'
-const state = { page: 0, search: '', status: 'all', attended: 'all', from: '', to: '', sort: 'name_asc', review: false, repeat: false, total: 0 }
+const state = { page: 0, search: '', status: 'all', type: 'all', department: '', deaconess: '', attended: 'all', from: '', to: '', sort: 'name_asc', review: false, repeat: false, total: 0 }
 let formMode = 'create' // 'create' | 'edit' | 'convert'
 let formPerson = null
 let profileYear = null
@@ -31,6 +31,9 @@ function listArgs(extra = {}) {
     p_kind: MODE,
     p_search: state.search,
     p_status: state.status,
+    p_type: state.type,
+    p_department: state.department || null,
+    p_deaconess: state.deaconess || null,
     p_attended: state.attended,
     p_from: state.from || null,
     p_to: state.to || null,
@@ -51,14 +54,16 @@ function statCard(value, label) {
 async function refreshStats() {
   const base = { p_kind: MODE, p_limit: 1, p_offset: 0 }
   try {
-    const [all, active, review] = await Promise.all([
+    const types = MODE === 'member' ? ['member', 'in_commitment', 'incoming_commitment'] : []
+    const [all, active, review, ...byType] = await Promise.all([
       callRpc('admin_list_people', { ...base, p_status: 'all' }),
       callRpc('admin_list_people', { ...base, p_status: 'active' }),
       callRpc('admin_list_people', { ...base, p_review: true }),
+      ...types.map((t) => callRpc('admin_list_people', { ...base, p_type: t })),
     ])
     $('#stats').replaceChildren(
-      statCard(all.total, MODE === 'member' ? 'Members' : 'Visitors'),
-      statCard(active.total, 'Active'),
+      statCard(all.total, MODE === 'member' ? 'All people in the directory' : 'Visitors'),
+      ...types.map((t, i) => statCard(byType[i].total, MEMBERSHIP_TYPES[t] === 'Member' ? 'Members' : MEMBERSHIP_TYPES[t])),
       statCard(all.total - active.total, 'Inactive'),
       statCard(review.total, 'Need review')
     )
@@ -88,7 +93,7 @@ function renderTable(rows) {
   const rangeLabel = state.from || state.to ? 'In period' : 'Meetings'
   const heads =
     MODE === 'member'
-      ? ['Member', 'Phone', 'Ministry / church', 'Status', 'Attended', rangeLabel, 'Last attended', '']
+      ? ['Member', 'Phone', 'Membership type', 'Department · deaconess · residence', 'Status', 'Attended', rangeLabel, 'Last attended', '']
       : ['Visitor', 'Phone', 'Church', 'Registrations', 'Attended', rangeLabel, 'Last attended', '']
 
   host.replaceChildren(
@@ -131,7 +136,15 @@ function row(p) {
       ? [
           name,
           el('td', {}, p.phone),
-          el('td', {}, [p.ministry, p.church_name].filter(Boolean).join(' · ') || '—'),
+          el('td', {}, membershipBadge(p.membership_type)),
+          el(
+            'td',
+            {},
+            p.department ? el('div', {}, el('strong', {}, p.department)) : null,
+            p.deaconess ? el('div', { class: 'muted' }, `Deaconess: ${p.deaconess}`) : null,
+            p.residence ? el('div', { class: 'muted' }, p.residence) : null,
+            !p.department && !p.deaconess && !p.residence ? '—' : null
+          ),
           el('td', {}, statusBadge),
           el('td', {}, String(p.attended_total)),
           el('td', {}, String(p.attended_range)),
@@ -191,8 +204,11 @@ async function exportCsv() {
       { header: 'Alternative phone', value: (p) => p.alt_phone || '' },
       { header: 'Email', value: (p) => p.email || '' },
       { header: 'Gender', value: (p) => p.gender || '' },
+      { header: 'Membership type', value: (p) => membershipTypeLabel(p.membership_type) },
+      { header: 'Residence', value: (p) => p.residence || '' },
+      { header: 'Department', value: (p) => p.department || '' },
+      { header: 'Deaconess', value: (p) => p.deaconess || '' },
       { header: 'Church', value: (p) => p.church_name || '' },
-      { header: 'Ministry', value: (p) => p.ministry || '' },
       { header: 'Membership date', value: (p) => (p.membership_date ? String(p.membership_date).slice(0, 10) : '') },
       { header: 'Status', value: (p) => p.status },
       { header: 'Needs review', value: (p) => (p.needs_review ? 'Yes' : '') },
@@ -217,6 +233,7 @@ const FIELD_ERRORS = {
   invalid_alt_phone: 'alt_phone',
   invalid_email: 'email',
   invalid_gender: 'gender',
+  invalid_type: 'membership_type',
   invalid_notes: 'notes',
   duplicate_phone: 'phone',
 }
@@ -245,6 +262,11 @@ function openForm(mode, person = null) {
   $('#person-title').textContent = mode === 'create' ? 'Add member' : mode === 'convert' ? `Convert ${person.full_name} to a member` : `Edit ${person.full_name}`
   $('#person-submit').textContent = mode === 'create' ? 'Save member' : mode === 'convert' ? 'Convert to member' : 'Save changes'
 
+  // The type list: a visitor is converted INTO a member type, so "Visitor" is not offered then.
+  const typeSelect = $('#p-type')
+  for (const option of typeSelect.options) option.hidden = mode === 'convert' && option.value === 'visitor'
+  typeSelect.value = person ? (mode === 'convert' ? 'member' : person.membership_type || 'member') : 'member'
+
   if (person) {
     form.full_name.value = person.full_name || ''
     form.phone.value = person.phone || ''
@@ -252,7 +274,9 @@ function openForm(mode, person = null) {
     form.email.value = person.email || ''
     form.gender.value = person.gender || ''
     form.church_name.value = person.church_name || ''
-    form.ministry.value = person.ministry || ''
+    form.department.value = person.department || ''
+    form.residence.value = person.residence || ''
+    form.deaconess.value = person.deaconess || ''
     form.membership_date.value = person.membership_date ? String(person.membership_date).slice(0, 10) : ''
     form.notes.value = person.notes || ''
   }
@@ -269,7 +293,10 @@ function readForm() {
     p_email: f.email.value.trim() || null,
     p_gender: f.gender.value || null,
     p_membership_date: f.membership_date.value || null,
-    p_ministry: f.ministry.value.trim() || null,
+    p_department: f.department.value.trim() || null,
+    p_residence: f.residence.value.trim() || null,
+    p_deaconess: f.deaconess.value.trim() || null,
+    p_membership_type: f.membership_type.value || null,
     p_church: f.church_name.value.trim() || null,
     p_notes: f.notes.value.trim() || null,
   }
@@ -398,11 +425,14 @@ async function openProfile(id, year = null) {
   const facts = [
     ['ID', p.label],
     ['Phone', p.phone],
+    ['Membership type', membershipTypeLabel(p.membership_type)],
     p.alt_phone ? ['Alternative phone', p.alt_phone] : null,
+    p.residence ? ['Residence', p.residence] : null,
+    p.department ? ['Department', p.department] : null,
+    p.deaconess ? ['Deaconess', p.deaconess] : null,
     p.email ? ['Email', p.email] : null,
     p.gender ? ['Gender', p.gender] : null,
     p.church_name ? ['Church', p.church_name] : null,
-    p.ministry ? ['Ministry', p.ministry] : null,
     p.membership_date ? ['Member since', formatDate(String(p.membership_date).slice(0, 10))] : null,
     p.became_member_at ? ['Became a member', formatDateTime(p.became_member_at)] : null,
     p.notes ? ['Notes', p.notes] : null,
@@ -466,7 +496,7 @@ async function openProfile(id, year = null) {
     el(
       'div',
       { class: 'row-actions', style: 'margin-bottom:.75rem' },
-      kindBadge(p.kind),
+      membershipBadge(p.membership_type),
       el('span', { class: `badge badge-${p.status === 'active' ? 'success' : 'muted'}` }, p.status === 'active' ? 'Active' : 'Inactive'),
       p.needs_review ? el('span', { class: 'badge badge-warning' }, 'Needs review') : null
     ),
@@ -512,6 +542,9 @@ export async function initPeople(mode) {
   }
   $('#search').addEventListener('input', debounce((e) => { state.search = e.target.value.trim(); reset() }, 300))
   $('#f-status').addEventListener('change', (e) => { state.status = e.target.value; reset() })
+  $('#f-type').addEventListener('change', (e) => { state.type = e.target.value; reset() })
+  $('#f-department').addEventListener('change', (e) => { state.department = e.target.value; reset() })
+  $('#f-deaconess').addEventListener('change', (e) => { state.deaconess = e.target.value; reset() })
   $('#f-attended').addEventListener('change', (e) => { state.attended = e.target.value; reset() })
   $('#f-from').addEventListener('change', (e) => { state.from = e.target.value; reset() })
   $('#f-to').addEventListener('change', (e) => { state.to = e.target.value; reset() })
@@ -525,5 +558,20 @@ export async function initPeople(mode) {
   $('#person-form').addEventListener('submit', (e) => { e.preventDefault(); submitForm(false) })
   for (const id of ['#p-name', '#p-phone', '#p-alt', '#p-email']) $(id).addEventListener('input', checkDuplicates)
 
-  await Promise.all([loadPage(), refreshStats()])
+  await Promise.all([loadPage(), refreshStats(), loadOptions()])
+}
+
+// Departments, deaconesses and residences already in use: suggestions in the form, choices in the filters.
+async function loadOptions() {
+  try {
+    const o = await callRpc('admin_person_options')
+    const fill = (id, values) => $(id).replaceChildren(...values.map((v) => el('option', { value: v })))
+    fill('#dl-department', o.departments)
+    fill('#dl-deaconess', o.deaconesses)
+    fill('#dl-residence', o.residences)
+    $('#f-department').append(...o.departments.map((d) => el('option', { value: d }, d)))
+    $('#f-deaconess').append(...o.deaconesses.map((d) => el('option', { value: d }, d)))
+  } catch {
+    /* suggestions are a convenience */
+  }
 }

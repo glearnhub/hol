@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "description": "Runs sql/*.sql against an in-memory PostgreSQL (PGlite) and checks the security rules.",
-  "scripts": { "test": "node db.test.mjs && node migration.test.mjs" },
+  "scripts": { "test": "node db.test.mjs && node migration.test.mjs && node upgrade-details.test.mjs" },
   "devDependencies": { "@electric-sql/pglite": "^0.5.10" }
 }

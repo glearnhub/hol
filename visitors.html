@@ -39,6 +39,24 @@
                 <input id="search" type="search" placeholder="Name, phone number or ID (for example V-00012)" autocomplete="off" />
               </div>
               <div class="field">
+                <label for="f-type">Membership type</label>
+                <select id="f-type">
+                  <option value="all">All types</option>
+                  <option value="incoming_commitment">Incoming Commitment Class</option>
+                  <option value="in_commitment">In Commitment Class</option>
+                  <option value="member">Member</option>
+                  <option value="visitor">Visitor</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="f-department">Department</label>
+                <select id="f-department"><option value="">All departments</option></select>
+              </div>
+              <div class="field">
+                <label for="f-deaconess">Deaconess</label>
+                <select id="f-deaconess"><option value="">All deaconesses</option></select>
+              </div>
+              <div class="field">
                 <label for="f-status">Status</label>
                 <select id="f-status">
                   <option value="all">All</option>
@@ -70,6 +88,8 @@
                   <option value="attended_desc">Most meetings attended</option>
                   <option value="attended_asc">Fewest meetings attended</option>
                   <option value="last_attended_desc">Attended most recently</option>
+                  <option value="department_asc">Department A–Z</option>
+                  <option value="deaconess_asc">Deaconess A–Z</option>
                   <option value="recent_desc">Newest first</option>
                 </select>
               </div>
@@ -99,6 +119,16 @@
                 Check the details, then convert. This person keeps one record: their registrations and attendance history stay with them, and past events will still show them as a visitor.
               </div>
               <div id="dup-box" aria-live="polite"></div>
+              <div class="field" data-field="membership_type">
+                <label for="p-type">Membership type</label>
+                <select id="p-type" name="membership_type">
+                  <option value="incoming_commitment">Incoming Commitment Class</option>
+                  <option value="in_commitment">In Commitment Class</option>
+                  <option value="member">Member</option>
+                  <option value="visitor">Visitor</option>
+                </select>
+                <div class="error"></div>
+              </div>
               <div class="field" data-field="full_name">
                 <label for="p-name">Full name</label>
                 <input id="p-name" name="full_name" type="text" maxlength="100" autocomplete="off" required />
@@ -138,11 +168,24 @@
                   <label for="p-church">Church (optional)</label>
                   <input id="p-church" name="church_name" type="text" maxlength="150" autocomplete="off" />
                 </div>
-                <div class="field" data-field="ministry">
-                  <label for="p-ministry">Ministry, group or department (optional)</label>
-                  <input id="p-ministry" name="ministry" type="text" maxlength="100" autocomplete="off" />
+                <div class="field" data-field="residence">
+                  <label for="p-residence">Residence (optional)</label>
+                  <input id="p-residence" name="residence" type="text" maxlength="150" autocomplete="off" list="dl-residence" placeholder="Estate or area, for example Kasarani" />
                 </div>
               </div>
+              <div class="field-row">
+                <div class="field" data-field="department">
+                  <label for="p-department">Department (optional)</label>
+                  <input id="p-department" name="department" type="text" maxlength="100" autocomplete="off" list="dl-department" placeholder="Where they serve in church" />
+                </div>
+                <div class="field" data-field="deaconess">
+                  <label for="p-deaconess">Deaconess (optional)</label>
+                  <input id="p-deaconess" name="deaconess" type="text" maxlength="100" autocomplete="off" list="dl-deaconess" placeholder="The leader assigned to mentor them" />
+                </div>
+              </div>
+              <datalist id="dl-residence"></datalist>
+              <datalist id="dl-department"></datalist>
+              <datalist id="dl-deaconess"></datalist>
               <div class="field" data-field="membership_date">
                 <label for="p-date">Membership date (optional)</label>
                 <input id="p-date" name="membership_date" type="date" />

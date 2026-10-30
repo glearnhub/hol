@@ -172,11 +172,12 @@ grant execute on function public.staff_search_people(uuid, text) to authenticate
 grant execute on function public.admin_registration_link(uuid, text, timestamptz) to authenticated;
 grant execute on function public.admin_set_person_attendance(uuid, uuid, boolean, text) to authenticated;
 grant execute on function public.admin_find_duplicates(text, text, text, text, uuid) to authenticated;
-grant execute on function public.admin_create_member(text, text, text, text, text, date, text, text, text, boolean) to authenticated;
-grant execute on function public.admin_update_person(uuid, text, text, text, text, text, date, text, text, text, boolean) to authenticated;
+grant execute on function public.admin_create_member(text, text, text, text, text, date, text, text, text, boolean, text, text, text) to authenticated;
+grant execute on function public.admin_update_person(uuid, text, text, text, text, text, date, text, text, text, boolean, text, text, text) to authenticated;
 grant execute on function public.admin_set_person_status(uuid, text) to authenticated;
-grant execute on function public.admin_convert_visitor(uuid, text, text, text, text, text, date, text, text, text) to authenticated;
-grant execute on function public.admin_list_people(text, text, text, text, date, date, text, integer, integer, boolean, integer) to authenticated;
+grant execute on function public.admin_convert_visitor(uuid, text, text, text, text, text, date, text, text, text, text, text, text) to authenticated;
+grant execute on function public.admin_list_people(text, text, text, text, date, date, text, integer, integer, boolean, integer, text, text, text) to authenticated;
+grant execute on function public.admin_person_options() to authenticated;
 grant execute on function public.admin_get_person(uuid, integer) to authenticated;
 grant execute on function public.admin_event_attendance_report(uuid) to authenticated;
 grant execute on function public.admin_annual_attendance(integer, text, boolean, text) to authenticated;

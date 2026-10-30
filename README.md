@@ -386,6 +386,25 @@ select id, 'manager' from auth.users where email = 'MANAGER-EMAIL-HERE';
 
 Managers are not limited to particular events (there is no per-event assignment).
 
+### Member details
+
+Besides name, phone, email, gender, church and notes, each person has:
+
+* **Membership type:** *Incoming Commitment Class*, *In Commitment Class*, *Member* or *Visitor*.
+  People in either commitment class are members of the directory, so ushers and reports treat
+  them as members. Only the type *Visitor* is a visitor. Changing the type of a visitor to a
+  member type converts them (their history stays), and setting a member back to *Visitor* moves
+  them to the visitors list.
+* **Residence:** where they live, for example "Kasarani, Nairobi".
+* **Department:** where they serve in church. (This is the field that used to be called
+  "ministry"; whatever was typed there is kept.)
+* **Deaconess:** the leader assigned to mentor them.
+
+On the Members page you can filter by membership type, department and deaconess (for example
+everyone a particular deaconess mentors), search by any of these, sort by department or
+deaconess, and export them all to CSV. Departments, deaconesses and residences already in use
+are offered as suggestions while typing, so spelling stays consistent.
+
 ### Events and their two links
 
 Every event has a **category**, a **visibility** (public, private or internal), and switches
@@ -403,7 +422,7 @@ never database IDs, and the table that holds them cannot be read through the web
 
 ### Day to day
 
-1. **Register a member:** *Members → Add member*. While you type, the page warns about people
+1. **Register a member:** *Members → Add member* (choose the membership type; the default is Member). While you type, the page warns about people
    with the same phone number, email or a similar name. The same phone number is refused; a
    similar name can be added after you have looked at the existing record.
 2. **Visitors register** through the registration link. A returning visitor is recognised by

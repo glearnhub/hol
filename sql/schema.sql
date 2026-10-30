@@ -273,7 +273,11 @@ create table if not exists public.people (
   ),
   gender text check (gender is null or gender in ('female', 'male', 'other')),
   church_name text check (church_name is null or char_length(church_name) <= 150),
-  ministry text check (ministry is null or char_length(ministry) <= 100),
+  department text check (department is null or char_length(department) <= 100),
+  residence text check (residence is null or char_length(residence) <= 150),
+  deaconess text check (deaconess is null or char_length(deaconess) <= 100),
+  membership_type text not null default 'visitor'
+    check (membership_type in ('incoming_commitment', 'in_commitment', 'member', 'visitor')),
   membership_date date,
   status text not null default 'active' check (status in ('active', 'inactive')),
   needs_review boolean not null default false,
@@ -297,6 +301,48 @@ drop trigger if exists people_touch_updated_at on public.people;
 create trigger people_touch_updated_at
   before update on public.people
   for each row execute function private.touch_updated_at();
+
+-- ---------------------------------------------------------------------------
+-- Member details: residence, department (where they serve in church), deaconess (the
+-- leader assigned to mentor them) and the membership type. "ministry" was the first name
+-- of the department field, so it is renamed, keeping what was typed into it.
+--   membership_type: incoming_commitment | in_commitment | member | visitor
+--   kind (member / visitor) follows it: only the type "visitor" is a visitor.
+-- ---------------------------------------------------------------------------
+do $$
+begin
+  if exists (select 1 from information_schema.columns
+             where table_schema = 'public' and table_name = 'people' and column_name = 'ministry')
+     and not exists (select 1 from information_schema.columns
+                     where table_schema = 'public' and table_name = 'people' and column_name = 'department') then
+    alter table public.people rename column ministry to department;
+  end if;
+end $$;
+
+alter table public.people add column if not exists department text;
+alter table public.people add column if not exists residence text;
+alter table public.people add column if not exists deaconess text;
+alter table public.people add column if not exists membership_type text not null default 'visitor';
+
+alter table public.people drop constraint if exists people_department_check;
+alter table public.people add constraint people_department_check check (department is null or char_length(department) <= 100);
+alter table public.people drop constraint if exists people_residence_check;
+alter table public.people add constraint people_residence_check check (residence is null or char_length(residence) <= 150);
+alter table public.people drop constraint if exists people_deaconess_check;
+alter table public.people add constraint people_deaconess_check check (deaconess is null or char_length(deaconess) <= 100);
+alter table public.people drop constraint if exists people_membership_type_check;
+alter table public.people add constraint people_membership_type_check
+  check (membership_type in ('incoming_commitment', 'in_commitment', 'member', 'visitor'));
+
+-- People who were members before this existed are plain "member".
+update public.people set membership_type = 'member' where kind = 'member' and membership_type = 'visitor';
+
+alter table public.people drop constraint if exists people_type_matches_kind;
+alter table public.people add constraint people_type_matches_kind
+  check ((kind = 'visitor') = (membership_type = 'visitor'));
+
+create index if not exists people_department_idx on public.people (lower(department)) where department is not null;
+create index if not exists people_deaconess_idx on public.people (lower(deaconess)) where deaconess is not null;
 
 -- ---------------------------------------------------------------------------
 -- registrations and attendance point at a person.
