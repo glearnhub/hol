@@ -55,7 +55,7 @@ function render() {
           el(
             'tr',
             {},
-            el('td', {}, el('strong', {}, d.name)),
+            el('td', {}, el('strong', {}, d.name), d.person_id ? el('span', { class: 'badge badge-muted', title: 'Also registered as a member' }, 'Member') : null),
             el('td', {}, d.group_name ? el('strong', {}, d.group_name) : el('span', { class: 'muted' }, 'No group name')),
             el('td', {}, d.phone || '—'),
             el(
@@ -106,6 +106,8 @@ function openForm(d = null) {
   $('#form-status').replaceChildren()
   $('#dea-title').textContent = d ? `Edit ${d.name}` : 'Add deaconess'
   $('#dea-submit').textContent = d ? 'Save changes' : 'Save deaconess'
+  $('#promote-box').classList.toggle('hidden', Boolean(d))
+  $('#promote-results').replaceChildren()
   if (d) {
     form.name.value = d.name
     form.group_name.value = d.group_name || ''
@@ -141,13 +143,57 @@ async function save(e) {
       return
     }
     $('#dea-dialog').close()
-    toast(editing ? 'Changes saved' : `${name} added to the list`)
+    const note = data.removed_from ? ` ${data.member} is no longer a mentee of ${data.removed_from}.` : ''
+    toast(editing ? `Changes saved.${note}` : `${name} added to the list.${note}`)
     await load()
   } catch (err) {
     notice($('#form-status'), errorText(err), 'error')
   } finally {
     submit.disabled = false
   }
+}
+
+// Promote a member: find her and copy her name and phone into the form.
+async function searchPromote() {
+  const q = $('#promote-search').value.trim()
+  const host = $('#promote-results')
+  if (q.length < 3) {
+    host.replaceChildren()
+    return
+  }
+  try {
+    const data = await callRpc('admin_list_people', { p_kind: 'member', p_search: q, p_status: 'active', p_limit: 8, p_offset: 0 })
+    const taken = new Set(rows.map((r) => r.person_id).filter(Boolean))
+    const found = data.rows.filter((m) => !taken.has(m.id))
+    if (found.length === 0) {
+      host.replaceChildren(el('p', { class: 'muted' }, data.rows.length ? 'She is already a deaconess.' : 'Nobody found. You can still type the name below.'))
+      return
+    }
+    host.replaceChildren(
+      el(
+        'table',
+        { class: 'data' },
+        el('tbody', {}, ...found.map((m) => el(
+          'tr',
+          {},
+          el('td', {}, el('strong', {}, m.full_name), el('div', { class: 'muted' }, m.deaconess ? `Mentee of ${m.deaconess}` : 'No deaconess')),
+          el('td', {}, m.phone),
+          el('td', {}, el('button', { class: 'btn btn-primary btn-small', type: 'button', onclick: () => pickMember(m) }, 'Choose'))
+        )))
+      )
+    )
+  } catch (e) {
+    notice(host, errorText(e), 'error')
+  }
+}
+
+function pickMember(m) {
+  const form = $('#dea-form')
+  form.name.value = m.full_name
+  form.phone.value = m.phone || ''
+  $('#promote-search').value = ''
+  setChildren($('#promote-results'), el('p', { class: 'notice notice-success' }, `${m.full_name} chosen.${m.deaconess ? ` She will be taken off ${m.deaconess}'s mentees.` : ''}`))
+  form.group_name.focus()
 }
 
 async function setActive(d, active) {
@@ -371,5 +417,6 @@ export async function initDeaconesses() {
   $('#reassign-form').addEventListener('submit', reassign)
   $('#mentee-search').addEventListener('input', debounce(searchMembers, 300))
   $('#dea-form').addEventListener('submit', save)
+  $('#promote-search').addEventListener('input', debounce(searchPromote, 300))
   await load()
 }

@@ -1257,6 +1257,53 @@ check('the report totals add up',
   && menteeReport.totals.mentees === menteeReport.deaconesses.reduce((n, d) => n + d.mentees.length, 0)
   && menteeReport.totals.unassigned === menteeReport.unassigned.length)
 check('the mentee report is for administrators only', await denied(() => M('admin_mentee_report', {})))
+
+// ---- 8.13 Promotion: a member who becomes a deaconess is no longer anyone's mentee ---------------------------
+const dLead = (await A('admin_save_deaconess', { p_name: 'Deaconess Lead Rosemary' })).id
+const pr1 = await mk2('Promoted Beatrice Mwangi', '0745 300 001')
+await A('admin_assign_deaconess', { p_person_ids: [pr1], p_deaconess_id: dLead })
+check('(setup) the member to be promoted is a mentee', (await menteesOf(dLead)).includes(pr1))
+const promo = await A('admin_save_deaconess', { p_name: 'Deaconess Beatrice Mwangi', p_phone: '0745 300 001', p_group_name: 'Lights of Hope' })
+check('saving a deaconess with the phone number of a member reports who she was mentored by',
+  promo.ok && promo.member === 'Promoted Beatrice Mwangi' && promo.removed_from === 'Deaconess Lead Rosemary', JSON.stringify(promo))
+check('...and the member is taken off her former deaconess',
+  (await db.query(`select deaconess_id from public.people where id = $1`, [pr1])).rows[0].deaconess_id === null && !(await menteesOf(dLead)).includes(pr1))
+check('...she stays a member', (await db.query(`select kind from public.people where id = $1`, [pr1])).rows[0].kind === 'member')
+check('the deaconess is linked to the member', (await db.query(`select person_id from public.deaconesses where id = $1`, [promo.id])).rows[0].person_id === pr1)
+check('the list says she is also a member', (await A('admin_list_deaconesses', {})).rows.find((d) => d.id === promo.id).person_id === pr1)
+check('the removal is in the audit log',
+  (await db.query(`select count(*)::int n from public.audit_log where action = 'mentee_removed' and details ->> 'reason' = 'became_deaconess'`)).rows[0].n >= 1)
+const reassign = await A('admin_assign_deaconess', { p_person_ids: [pr1], p_deaconess_id: dLead })
+check('a deaconess cannot be made a mentee again', reassign.changed === 0 && reassign.skipped === 1 && (await menteesOf(dLead)).length === 0)
+check('...not even when her member record is saved with a deaconess',
+  (await A('admin_update_person', { p_id: pr1, p_full_name: 'Promoted Beatrice Mwangi', p_phone: '0745 300 001', p_deaconess_id: dLead })).ok !== false
+  && (await db.query(`select deaconess_id from public.people where id = $1`, [pr1])).rows[0].deaconess_id === null)
+check('she is not listed as a member without a deaconess',
+  !(await A('admin_mentee_report', {})).unassigned.some((u) => u.id === pr1))
+
+// the other order: the deaconess is added first, the member afterwards (create, import)
+const dEarly = (await A('admin_save_deaconess', { p_name: 'Deaconess Early Priscilla', p_phone: '0745 300 002' })).id
+check('a deaconess added without a matching member is not linked',
+  (await db.query(`select person_id from public.deaconesses where id = $1`, [dEarly])).rows[0].person_id === null)
+const pr2 = (await A('admin_create_member', { p_full_name: 'Priscilla Wanjiru Early', p_phone: '0745 300 002', p_deaconess_id: dLead })).id
+check('a member created later with her phone number is linked and gets no deaconess',
+  (await db.query(`select person_id from public.deaconesses where id = $1`, [dEarly])).rows[0].person_id === pr2
+  && (await db.query(`select deaconess_id from public.people where id = $1`, [pr2])).rows[0].deaconess_id === null)
+const imp = await A('admin_import_members', { p_rows: [{ full_name: 'Imported Hannah Cheptoo', phone: '0745 300 003', deaconess: 'Deaconess Lead Rosemary' }], p_commit: true })
+const hannah = (await db.query(`select id from public.people where phone = '+254745300003'`)).rows[0].id
+const dHannah = (await A('admin_save_deaconess', { p_name: 'Deaconess Imported Hannah', p_phone: '0745 300 003' })).id
+check('(setup) an imported member is mentored, then promoted',
+  imp.counts.new === 1 && (await db.query(`select deaconess_id from public.people where id = $1`, [hannah])).rows[0].deaconess_id === null
+  && (await db.query(`select person_id from public.deaconesses where id = $1`, [dHannah])).rows[0].person_id === hannah)
+const vis = (await db.query(`insert into public.people (kind, full_name, phone) values ('visitor', 'Visiting Lydia Atieno', '+254745300004') returning id`)).rows[0].id
+const dLydia = (await A('admin_save_deaconess', { p_name: 'Deaconess Visiting Lydia', p_phone: '0745 300 004' })).id
+check('a visitor whose number matches a deaconess is not linked while still a visitor',
+  (await db.query(`select person_id from public.deaconesses where id = $1`, [dLydia])).rows[0].person_id === null)
+await A('admin_convert_visitor', { p_id: vis, p_full_name: 'Visiting Lydia Atieno', p_phone: '0745 300 004', p_deaconess_id: dLead })
+check('...but is linked, with no deaconess, once she is converted to a member',
+  (await db.query(`select person_id from public.deaconesses where id = $1`, [dLydia])).rows[0].person_id === vis
+  && (await db.query(`select deaconess_id from public.people where id = $1`, [vis])).rows[0].deaconess_id === null)
+check('a deaconess with no phone number is simply left alone', (await A('admin_save_deaconess', { p_name: 'Deaconess No Phone Ruth' })).removed_from === null)
 }
 console.log(`\n${passed} passed, ${failed} failed`)
 process.exit(failed ? 1 : 0)

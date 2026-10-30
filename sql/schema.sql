@@ -372,6 +372,14 @@ alter table public.people add constraint people_deaconess_id_fkey
 drop index if exists public.people_deaconess_idx;  -- an older version indexed the text column under this name
 create index if not exists people_deaconess_idx on public.people (deaconess_id) where deaconess_id is not null;
 
+-- A deaconess is usually a member who was promoted. The link (found by phone number, see
+-- functions.sql) lets the system take her off the list of mentees of her former deaconess.
+alter table public.deaconesses add column if not exists person_id uuid;
+alter table public.deaconesses drop constraint if exists deaconesses_person_id_fkey;
+alter table public.deaconesses add constraint deaconesses_person_id_fkey
+  foreign key (person_id) references public.people (id) on delete set null;
+create unique index if not exists deaconesses_person_uq on public.deaconesses (person_id) where person_id is not null;
+
 -- An earlier version stored the deaconess as typed text. Every distinct name becomes an
 -- entry in the list, the members are pointed at it, and the text column is removed.
 do $$

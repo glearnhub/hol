@@ -91,6 +91,12 @@
             </div>
             <form id="dea-form" class="dialog-body" novalidate>
               <div id="form-status" aria-live="polite"></div>
+              <div id="promote-box" class="field">
+                <label for="promote-search">Promote a member (optional)</label>
+                <input id="promote-search" type="search" autocomplete="off" placeholder="Search a member by name or phone number" />
+                <div class="hint">Choosing a member fills in her name and phone below. When she is saved as a deaconess she is taken off the mentees of her present deaconess.</div>
+                <div id="promote-results" class="table-wrap"></div>
+              </div>
               <div class="field" data-field="name">
                 <label for="d-name">Name</label>
                 <input id="d-name" name="name" type="text" maxlength="100" autocomplete="off" placeholder="For example Deaconess Grace Njeri" required />

@@ -411,6 +411,11 @@ Besides name, phone, email, gender, church and notes, each person has:
   member by name or phone and adds her (moving her if another deaconess had her), **Re-assign** moves a
   mentee to a different deaconess, and **Remove** takes her off the deaconess (she stays a member).
   Only members can be mentees. Every move is in the audit log.
+* **Promoting a member:** in *Add deaconess*, **Promote a member** finds her and fills in her name and phone. A
+  deaconess and a member are the same woman when their phone numbers match, in whichever order they were added
+  (also when a visitor is converted or a member is imported later). From then on she is taken off her former
+  deaconess's mentees, shows a *Member* tag in the list, cannot be assigned to a deaconess again, and is not
+  counted as a member without a deaconess in the mentee report.
 * **Mentee report:** the **Mentee report** button beside *Add deaconess* opens a printable report on the
   usual letterhead: each deaconess (with her group name) and her mentees listed under her, then the
   members who have no deaconess yet. It opens the print dialog straight away (Print / save as PDF),

@@ -2652,6 +2652,7 @@ begin
   perform private.require_admin();
   select coalesce(jsonb_agg(jsonb_build_object(
     'id', d.id, 'name', d.name, 'group_name', d.group_name, 'phone', d.phone, 'active', d.active, 'created_at', d.created_at,
+    'person_id', d.person_id,
     'members', (select count(*) from public.people p where p.deaconess_id = d.id and p.kind = 'member'),
     'inactive_members', (select count(*) from public.people p where p.deaconess_id = d.id and p.kind = 'member' and p.status = 'inactive')
   ) order by d.active desc, lower(d.name)), '[]'::jsonb) into v_rows
@@ -2684,6 +2685,8 @@ declare
   other public.deaconesses;
   old public.deaconesses;
   d public.deaconesses;
+  v_promoted text;
+  v_from text;
 begin
   perform private.require_admin();
 
@@ -2698,6 +2701,13 @@ begin
   where lower(btrim(name)) = lower(v_name) and (p_id is null or id <> p_id);
   if found then
     return private.fail('duplicate_name', format('%s is already in the list.', other.name));
+  end if;
+
+  -- A member with this phone number is the same woman: she stops being someone's mentee.
+  if v_phone is not null then
+    select p.full_name, dd.name into v_promoted, v_from
+    from public.people p left join public.deaconesses dd on dd.id = p.deaconess_id
+    where p.kind = 'member' and p.phone = v_phone;
   end if;
 
   if p_id is null then
@@ -2719,7 +2729,7 @@ begin
         jsonb_build_object('deaconess_id', d.id, 'from', old.group_name, 'to', d.group_name));
     end if;
   end if;
-  return jsonb_build_object('ok', true, 'id', d.id);
+  return jsonb_build_object('ok', true, 'id', d.id, 'member', v_promoted, 'removed_from', v_from);
 end;
 $$;
 
@@ -3477,6 +3487,7 @@ begin
   for r in
     select id, deaconess_id as old_id from public.people
     where id = any (p_person_ids) and kind = 'member' and deaconess_id is distinct from p_deaconess_id
+      and (p_deaconess_id is null or not exists (select 1 from public.deaconesses d where d.person_id = people.id))
     for update
   loop
     update public.people set deaconess_id = p_deaconess_id where id = r.id;
@@ -3525,7 +3536,8 @@ begin
     'id', p.id, 'label', private.person_label(p), 'full_name', p.full_name, 'phone', p.phone,
     'membership_type', p.membership_type, 'status', p.status
   ) order by lower(p.full_name)), '[]'::jsonb) into v_unassigned
-  from public.people p where p.kind = 'member' and p.deaconess_id is null and p.status = 'active';
+  from public.people p where p.kind = 'member' and p.deaconess_id is null and p.status = 'active'
+    and not exists (select 1 from public.deaconesses d where d.person_id = p.id);
 
   select count(*) into v_mentees from public.people where kind = 'member' and deaconess_id is not null;
 
@@ -3536,3 +3548,106 @@ begin
       'unassigned', jsonb_array_length(v_unassigned)));
 end;
 $$;
+
+-- ---------------------------------------------------------------------------
+-- Promotion: a member who becomes a deaconess is no longer anyone's mentee.
+-- The member and the deaconess are the same woman when their phone numbers match
+-- (either one can be added first). The triggers cover every way in: the Deaconesses page,
+-- the member forms, the visitor conversion and the CSV import.
+-- ---------------------------------------------------------------------------
+create or replace function private.deaconess_find_member()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if new.person_id is null and new.phone is not null then
+    select p.id into new.person_id from public.people p
+    where p.kind = 'member' and p.phone = new.phone
+      and not exists (select 1 from public.deaconesses o where o.person_id = p.id and o.id is distinct from new.id)
+    limit 1;
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function private.deaconess_release_mentee()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_old uuid;
+begin
+  if new.person_id is not null then
+    select deaconess_id into v_old from public.people where id = new.person_id;
+    if v_old is not null then
+      update public.people set deaconess_id = null where id = new.person_id;
+      perform private.audit(coalesce('admin:' || auth.uid()::text, 'system'), 'mentee_removed', null,
+        jsonb_build_object('person_id', new.person_id, 'from_deaconess', v_old, 'reason', 'became_deaconess', 'deaconess_id', new.id));
+    end if;
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists deaconesses_find_member on public.deaconesses;
+create trigger deaconesses_find_member
+  before insert or update of phone, person_id on public.deaconesses
+  for each row execute function private.deaconess_find_member();
+
+drop trigger if exists deaconesses_release_mentee on public.deaconesses;
+create trigger deaconesses_release_mentee
+  after insert or update of phone, person_id on public.deaconesses
+  for each row execute function private.deaconess_release_mentee();
+
+-- A deaconess is never given a deaconess of her own, however the member is saved.
+create or replace function private.people_not_mentee_of_deaconess()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if new.deaconess_id is not null and exists (select 1 from public.deaconesses where person_id = new.id) then
+    new.deaconess_id := null;
+  end if;
+  return new;
+end;
+$$;
+
+-- A member added (or given a phone number, or converted from a visitor) after the deaconess
+-- was added is linked to her the same way.
+create or replace function private.people_find_deaconess()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if new.kind = 'member' and new.phone is not null then
+    update public.deaconesses set person_id = new.id
+    where phone = new.phone and person_id is null
+      and not exists (select 1 from public.deaconesses o where o.person_id = new.id);
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists people_not_mentee_of_deaconess on public.people;
+create trigger people_not_mentee_of_deaconess
+  before insert or update of deaconess_id on public.people
+  for each row execute function private.people_not_mentee_of_deaconess();
+
+drop trigger if exists people_find_deaconess on public.people;
+create trigger people_find_deaconess
+  after insert or update of phone, kind on public.people
+  for each row execute function private.people_find_deaconess();
+
+-- Existing data: deaconesses whose phone matches a member are linked now, and those members
+-- are taken off their deaconess's list. (Safe to run again.)
+update public.deaconesses set person_id = null
+where person_id is null and phone is not null
+  and exists (select 1 from public.people p where p.kind = 'member' and p.phone = deaconesses.phone);
