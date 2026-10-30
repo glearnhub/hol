@@ -8,7 +8,7 @@ import { supabase } from './supabase-client.js'
 import { requireAdmin } from './admin-auth.js'
 import { callRpc, errorText, kindBadge, MEMBERSHIP_TYPES, membershipBadge, membershipTypeLabel } from './admin-common.js'
 import { initImport } from './people-import.js'
-import { el, $, setChildren, formatDate, formatDateTime, notice, toast, toCsv, downloadFile, debounce, slug } from './ui.js'
+import { el, $, setChildren, formatDate, formatDateTime, notice, toast, toCsv, downloadFile, debounce, slug, confirmDialog } from './ui.js'
 
 const PAGE_SIZE = 20
 
@@ -177,7 +177,7 @@ function renderPager() {
 async function changeStatus(p, status) {
   const verb = status === 'inactive' ? 'Deactivate' : 'Activate'
   const extra = status === 'inactive' ? ' They will no longer appear when ushers search, but their history is kept.' : ''
-  if (!confirm(`${verb} ${p.full_name}?${extra}`)) return
+  if (!(await confirmDialog(extra.trim() || 'They will appear in searches again.', { title: `${verb} ${p.full_name}?`, confirmLabel: verb, danger: status === 'inactive' }))) return
   try {
     await callRpc('admin_set_person_status', { p_id: p.id, p_status: status })
     toast(status === 'active' ? `${p.full_name} is active again` : `${p.full_name} deactivated`)

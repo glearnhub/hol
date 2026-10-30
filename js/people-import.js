@@ -7,7 +7,7 @@
 //      error. Nothing is saved at this stage.
 //   3. Press Import to save the rows that passed.
 import { callRpc, errorText } from './admin-common.js'
-import { el, $, setChildren, toCsv, downloadFile, toast } from './ui.js'
+import { el, $, setChildren, toCsv, downloadFile, toast, confirmDialog } from './ui.js'
 
 const TEMPLATE_COLUMNS = [
   'Full name', 'Phone', 'Alternative phone', 'Email', 'Gender', 'Membership type',
@@ -251,7 +251,7 @@ async function runImport() {
   const { new: added, converted } = lastResult.counts
   if (added + converted === 0) return
   const what = [added ? `add ${added} new member${added === 1 ? '' : 's'}` : null, converted ? `make ${converted} existing visitor${converted === 1 ? ' a member' : 's members'}` : null].filter(Boolean).join(' and ')
-  if (!confirm(`Import now? This will ${what}.`)) return
+  if (!(await confirmDialog(`This will ${what}.`, { title: 'Import now?', confirmLabel: 'Import' }))) return
   const button = $('#imp-go')
   button.disabled = true
   button.textContent = 'Importing…'

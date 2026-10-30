@@ -4,7 +4,7 @@
 import { supabase } from './supabase-client.js'
 import { requireAdmin } from './admin-auth.js'
 import { callRpc, errorText, membershipBadge } from './admin-common.js'
-import { el, $, setChildren, notice, toast, debounce } from './ui.js'
+import { el, $, setChildren, notice, toast, debounce, confirmDialog, alertDialog } from './ui.js'
 
 let rows = []
 let editing = null // the deaconess being edited, or null when adding
@@ -151,7 +151,7 @@ async function save(e) {
 }
 
 async function setActive(d, active) {
-  if (!active && !confirm(`Deactivate ${d.name}? She stays on the members she already mentors but will not be offered for new members.`)) return
+  if (!active && !(await confirmDialog('She stays on the members she already mentors but will not be offered for new members.', { title: `Deactivate ${d.name}?`, confirmLabel: 'Deactivate', danger: true }))) return
   try {
     await callRpc('admin_save_deaconess', { p_name: d.name, p_group_name: d.group_name, p_phone: d.phone, p_id: d.id, p_active: active })
     toast(active ? `${d.name} is active again` : `${d.name} deactivated`)
@@ -163,10 +163,10 @@ async function setActive(d, active) {
 
 async function remove(d) {
   if (d.members > 0) {
-    alert(`${d.name} mentors ${d.members} member${d.members === 1 ? '' : 's'}, so she cannot be removed. Move them to another deaconess first, or use Deactivate.`)
+    await alertDialog(`${d.name} mentors ${d.members} member${d.members === 1 ? '' : 's'}, so she cannot be removed. Move them to another deaconess first, or use Deactivate.`, { title: 'She cannot be removed yet' })
     return
   }
-  if (!confirm(`Remove ${d.name} from the list?`)) return
+  if (!(await confirmDialog('She will no longer be in the list of deaconesses.', { title: `Remove ${d.name}?`, confirmLabel: 'Remove', danger: true }))) return
   try {
     await callRpc('admin_delete_deaconess', { p_id: d.id })
     toast(`${d.name} removed`)
@@ -247,7 +247,7 @@ async function refreshAll() {
 }
 
 async function removeMentee(m) {
-  if (!confirm(`Remove ${m.full_name} from ${current.name}? She stays a member, just without a deaconess.`)) return
+  if (!(await confirmDialog(`${m.full_name} stays a member, just without a deaconess.`, { title: `Remove ${m.full_name} from ${current.name}?`, confirmLabel: 'Remove', danger: true }))) return
   try {
     await callRpc('admin_assign_deaconess', { p_person_ids: [m.id], p_deaconess_id: null })
     toast(`${m.full_name} removed from ${current.name}`)
@@ -345,7 +345,7 @@ async function searchMembers() {
 }
 
 async function addMentee(m, other) {
-  if (other && !confirm(`${m.full_name} is mentored by ${other.name}. Move her to ${current.name}?`)) return
+  if (other && !(await confirmDialog(`${m.full_name} is mentored by ${other.name}.`, { title: `Move her to ${current.name}?`, confirmLabel: 'Move her' }))) return
   try {
     await callRpc('admin_assign_deaconess', { p_person_ids: [m.id], p_deaconess_id: current.id })
     toast(`${m.full_name} added to ${current.name}`)

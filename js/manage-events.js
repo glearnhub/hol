@@ -5,7 +5,7 @@ import { supabase } from './supabase-client.js'
 import { requireAdmin } from './admin-auth.js'
 import { POSTER_BUCKET, posterUrls } from './posters.js'
 import { callRpc, eventStatusBadge, errorText, CATEGORIES, VISIBILITY } from './admin-common.js'
-import { el, $, param, formatDate, formatTimeRange, formatSchedule, formatDateTime, notice, toast } from './ui.js'
+import { el, $, param, formatDate, formatTimeRange, formatSchedule, formatDateTime, notice, toast, confirmDialog } from './ui.js'
 
 const MAX_POSTER_BYTES = 2 * 1024 * 1024
 const POSTER_TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }
@@ -108,14 +108,14 @@ async function setStatus(ev, status) {
 }
 
 async function completeEvent(ev) {
-  if (!confirm(`Mark "${ev.name}" as completed? It will show as finished and no more registrations or check-ins will be accepted.`)) return
+  if (!(await confirmDialog('It will show as finished and no more registrations or check-ins will be accepted.', { title: `Mark "${ev.name}" as completed?`, confirmLabel: 'Mark as completed' }))) return
   await setStatus(ev, 'completed')
 }
 
 async function cancelEvent(ev) {
   const c = counts.get(ev.id)
   const people = c && c.registrations ? ` ${c.registrations} registered participant(s) will see that it is cancelled.` : ''
-  if (!confirm(`Cancel "${ev.name}"? It will disappear from the public site and registration will close.${people}`)) return
+  if (!(await confirmDialog(`It will disappear from the public site and registration will close.${people}`, { title: `Cancel "${ev.name}"?`, confirmLabel: 'Cancel event', cancelLabel: 'Keep it', danger: true }))) return
   await setStatus(ev, 'cancelled')
 }
 
@@ -427,8 +427,8 @@ async function renderRegistrationLink(data) {
 }
 
 async function registrationAction(action) {
-  if (action === 'regenerate' && !confirm('Create a new registration link? The current link will stop working immediately, including anything already shared.')) return
-  if (action === 'disable' && !confirm('Disable the registration link? Anyone opening it will be told it is no longer active.')) return
+  if (action === 'regenerate' && !(await confirmDialog('The current link will stop working immediately, including anything already shared.', { title: 'Create a new registration link?', confirmLabel: 'Create new link', danger: true }))) return
+  if (action === 'disable' && !(await confirmDialog('Anyone opening it will be told it is no longer active.', { title: 'Disable the registration link?', confirmLabel: 'Disable', danger: true }))) return
   try {
     await callRpc('admin_registration_link', { p_event_id: linksEventId, p_action: action })
     toast(action === 'disable' ? 'Registration link disabled' : action === 'regenerate' ? 'New registration link created' : 'Registration link created')
@@ -529,7 +529,7 @@ async function createLink(e) {
 }
 
 async function revoke(link) {
-  if (!confirm(`Revoke the "${link.label}" link? Anyone using it will be locked out immediately.`)) return
+  if (!(await confirmDialog('Anyone using it will be locked out immediately.', { title: `Revoke the "${link.label}" link?`, confirmLabel: 'Revoke', danger: true }))) return
   try {
     await callRpc('admin_revoke_volunteer_link', { p_access_id: link.id })
     toast('Link revoked')
@@ -540,7 +540,7 @@ async function revoke(link) {
 }
 
 async function regenerate(link) {
-  if (!confirm(`Create a new link for "${link.label}"? The old one will stop working.`)) return
+  if (!(await confirmDialog('The old one will stop working.', { title: `Create a new link for "${link.label}"?`, confirmLabel: 'Create new link', danger: true }))) return
   try {
     const expires = new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString()
     await callRpc('admin_regenerate_volunteer_link', { p_access_id: link.id, p_expires_at: expires })

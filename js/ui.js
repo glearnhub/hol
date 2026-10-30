@@ -94,6 +94,61 @@ export function toast(message, type = 'success') {
   setTimeout(() => t.remove(), 3700)
 }
 
+// ---- Modal dialogs (used instead of the browser's own confirm / alert / prompt boxes) ----
+// confirmDialog -> true/false, promptDialog -> the text typed, or null when cancelled, alertDialog -> nothing.
+function openModal({ title, message, field, confirmLabel, cancelLabel, danger }) {
+  return new Promise((resolve) => {
+    const input = field
+      ? el('textarea', { id: 'modal-input', rows: '3', maxlength: String(field.maxlength || 300), placeholder: field.placeholder || '' })
+      : null
+    const cancelButton = cancelLabel === null ? null : el('button', { class: 'btn btn-outline', type: 'button' }, cancelLabel || 'Cancel')
+    const okButton = el('button', { class: `btn ${danger ? 'btn-danger' : 'btn-primary'}`, type: 'submit' }, confirmLabel || 'OK')
+    const form = el(
+      'form',
+      { class: 'modal-form', novalidate: true },
+      el('h2', { class: 'modal-title' }, title),
+      el('p', { class: 'modal-message' }, message),
+      field ? el('label', { class: 'modal-label', for: 'modal-input' }, field.label || '') : null,
+      input,
+      el('div', { class: 'row-actions modal-actions' }, cancelButton, okButton)
+    )
+    const dialog = el('dialog', { class: 'modal-dialog', 'aria-label': title }, form)
+    // Resolve straight from the buttons; Escape and the close event are only a fallback.
+    let done = false
+    const finish = (value) => {
+      if (done) return
+      done = true
+      if (dialog.open) dialog.close()
+      dialog.remove()
+      if (field) resolve(value === true ? input.value.trim() : null)
+      else resolve(cancelLabel === null ? undefined : value === true)
+    }
+    form.addEventListener('submit', (e) => {
+      e.preventDefault()
+      finish(true)
+    })
+    if (cancelButton) cancelButton.addEventListener('click', () => finish(false))
+    dialog.addEventListener('cancel', (e) => {
+      e.preventDefault()
+      finish(false)
+    })
+    dialog.addEventListener('close', () => finish(false))
+    document.body.append(dialog)
+    dialog.showModal()
+    // A destructive action starts on Cancel so that pressing Enter never deletes by accident.
+    ;(input || (danger && cancelButton) || okButton).focus()
+  })
+}
+
+export const confirmDialog = (message, { title = 'Please confirm', confirmLabel = 'Yes, continue', cancelLabel = 'Cancel', danger = false } = {}) =>
+  openModal({ title, message, confirmLabel, cancelLabel, danger })
+
+export const alertDialog = (message, { title = 'Notice', confirmLabel = 'OK' } = {}) =>
+  openModal({ title, message, confirmLabel, cancelLabel: null })
+
+export const promptDialog = (message, { title = 'Add a note', label = '', placeholder = '', confirmLabel = 'Continue', cancelLabel = 'Cancel', danger = false, maxlength = 300 } = {}) =>
+  openModal({ title, message, field: { label, placeholder, maxlength }, confirmLabel, cancelLabel, danger })
+
 export function notConfiguredNotice() {
   return el(
     'div',

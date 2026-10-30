@@ -807,3 +807,39 @@ dialog.wide-dialog {
     break-inside: avoid-page;
   }
 }
+
+/* ---- Confirmation / notice / reason modals ---- */
+dialog.modal-dialog {
+  width: min(440px, 92vw);
+}
+.modal-form {
+  padding: 1.5rem;
+}
+.modal-title {
+  margin: 0 0 0.6rem;
+  font-size: 1.2rem;
+  line-height: 1.3;
+}
+.modal-message {
+  margin: 0 0 1rem;
+  color: var(--muted, #4b5563);
+  white-space: pre-line;
+}
+.modal-label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-weight: 600;
+}
+.modal-form textarea {
+  width: 100%;
+  margin-bottom: 1rem;
+  font: inherit;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  resize: vertical;
+}
+.modal-actions {
+  justify-content: flex-end;
+  margin-top: 0.25rem;
+}

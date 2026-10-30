@@ -4,7 +4,7 @@ import { callRpc, attendanceBadge, attendanceLabel, errorText, kindBadge, member
 import {
   el, $, param, isUuid, formatDate, formatTimeRange, formatDateTime, notice, toast, toCsv, downloadFile,
   debounce, slug,
-  formatSchedule,
+  formatSchedule, confirmDialog, promptDialog,
 } from './ui.js'
 
 const PAGE_SIZE = 20
@@ -113,7 +113,7 @@ async function setPresent(r, present) {
     let reason = null
     if (!present) {
       // Taking someone off the attendance list keeps a copy and the reason.
-      reason = prompt(`Why is ${r.full_name} being removed from the attendance list? (for example "marked by mistake")`)
+      reason = await promptDialog('A copy is kept in the history together with your reason.', { title: `Remove ${r.full_name} from the attendance list?`, label: 'Reason (optional)', placeholder: 'For example: marked by mistake', confirmLabel: 'Remove', danger: true })
       if (reason === null) return
     }
     await callRpc('admin_set_attendance', { p_registration_id: r.id, p_present: present, p_reason: reason })
@@ -125,7 +125,7 @@ async function setPresent(r, present) {
 }
 
 async function cancelRegistration(r) {
-  if (!confirm(`Cancel the registration of ${r.full_name}? Their QR code will stop working and the place is freed.`)) return
+  if (!(await confirmDialog('Their QR code will stop working and the place is freed.', { title: `Cancel the registration of ${r.full_name}?`, confirmLabel: 'Cancel registration', cancelLabel: 'Keep it', danger: true }))) return
   try {
     await callRpc('admin_cancel_registration', { p_registration_id: r.id })
     toast('Registration cancelled')
@@ -216,7 +216,7 @@ async function searchPeople() {
 async function setPersonPresent(p, present) {
   let reason = null
   if (!present) {
-    reason = prompt(`Why is ${p.full_name} being removed from the attendance list? (for example "marked by mistake")`)
+    reason = await promptDialog('A copy is kept in the history together with your reason.', { title: `Remove ${p.full_name} from the attendance list?`, label: 'Reason (optional)', placeholder: 'For example: marked by mistake', confirmLabel: 'Remove', danger: true })
     if (reason === null) return
   }
   try {
