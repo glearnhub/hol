@@ -1,9 +1,10 @@
 // Import members from a CSV file (Members page).
 //
-//   1. Download the template, fill it in (Excel or Google Sheets, then save as CSV).
+//   1. Download the template, fill it in (Excel or Google Sheets). A CSV or an Excel file (.xlsx) works.
 //   2. Choose the file. It is read in the browser and CHECKED by the database, which reports
-//      every row: will be added, skipped (already registered, possible duplicate) or error.
-//      Nothing is saved at this stage.
+//      every row: will be added, will be converted (an existing visitor with the same phone
+//      number or email becomes a member), skipped (already a member, possible duplicate) or
+//      error. Nothing is saved at this stage.
 //   3. Press Import to save the rows that passed.
 import { callRpc, errorText } from './admin-common.js'
 import { el, $, setChildren, toCsv, downloadFile, toast } from './ui.js'
@@ -83,8 +84,7 @@ function normaliseDate(value) {
   return v // left as typed: the check reports it against its row
 }
 
-function readPeople(text) {
-  const table = parseCsv(text)
+function readPeople(table) {
   if (table.length < 2) throw new Error('The file has no people in it. It needs a header row and at least one person.')
 
   const headers = table[0].cells.map((h) => h.toLowerCase().replace(/[^a-z0-9]/g, ''))
@@ -144,6 +144,7 @@ export function downloadTemplate() {
 const options = () => ({
   p_create_deaconesses: $('#imp-create-dea').checked,
   p_allow_similar: $('#imp-allow-similar').checked,
+  p_force_match: $('#imp-force-match').checked,
 })
 
 async function check() {
@@ -162,6 +163,7 @@ async function check() {
 
 const STATUS = {
   new: ['Will be added', 'success'],
+  converted: ['Will become a member', 'info'],
   skipped: ['Skipped', 'warning'],
   error: ['Error', 'error'],
 }
@@ -170,8 +172,9 @@ function renderResult(committed = false) {
   const res = lastResult
   const c = res.counts
   const showAll = $('#imp-show-all').checked
-  const rows = res.rows.filter((r) => showAll || r.status !== 'new' || committed)
+  const rows = res.rows.filter((r) => showAll || committed || (r.status !== 'new' && r.status !== 'converted') || r.status === 'converted')
   const problems = c.skipped + c.errors
+  const todo = c.new + c.converted
 
   setChildren(
     $('#imp-result'),
@@ -181,7 +184,8 @@ function renderResult(committed = false) {
     el(
       'div',
       { class: 'stats' },
-      statBox(c.new, committed ? 'Added' : 'Will be added'),
+      statBox(c.new, committed ? 'New members added' : 'New members to add'),
+      statBox(c.converted, committed ? 'Visitors made members' : 'Visitors to make members'),
       statBox(c.skipped, 'Skipped'),
       statBox(c.errors, 'Errors')
     ),
@@ -189,12 +193,21 @@ function renderResult(committed = false) {
       ? el('div', { class: 'notice notice-info' }, `${committed ? 'Added to the Deaconesses list' : 'Will be added to the Deaconesses list'}: ${res.new_deaconesses.join(', ')}.`)
       : null,
     committed
-      ? el('div', { class: 'notice notice-success' }, `${c.new} member${c.new === 1 ? '' : 's'} added.${problems ? ` ${problems} row${problems === 1 ? ' was' : 's were'} not added: see below.` : ''}`)
-      : c.new === 0
+      ? el(
+          'div',
+          { class: 'notice notice-success' },
+          `${c.new} new member${c.new === 1 ? '' : 's'} added` +
+            (c.converted ? ` and ${c.converted} visitor${c.converted === 1 ? '' : 's'} made member${c.converted === 1 ? '' : 's'} (their history is kept).` : '.') +
+            (problems ? ` ${problems} row${problems === 1 ? ' was' : 's were'} not changed: see below.` : '')
+        )
+      : todo === 0
         ? el('div', { class: 'notice notice-warning' }, 'Nobody in this file can be added yet. Fix the rows below in your file and choose it again.')
         : problems
-          ? el('div', { class: 'notice notice-info' }, `${c.new} will be added. The ${problems} row${problems === 1 ? '' : 's'} below will not be, until fixed.`)
-          : el('div', { class: 'notice notice-success' }, `All ${c.new} rows look good.`),
+          ? el('div', { class: 'notice notice-info' }, `${todo} row${todo === 1 ? '' : 's'} will be saved. The ${problems} row${problems === 1 ? '' : 's'} below will not be, until fixed.`)
+          : el('div', { class: 'notice notice-success' }, `All ${todo} rows look good.`),
+    c.converted && !committed
+      ? el('div', { class: 'notice notice-info' }, `${c.converted} ${c.converted === 1 ? 'person is already on record as a visitor' : 'people are already on record as visitors'} (same phone number or email). ${c.converted === 1 ? 'They' : 'They'} will become members, keeping their registrations and attendance, with the details from your file added.`)
+      : null,
     rows.length
       ? el(
           'div',
@@ -214,7 +227,7 @@ function renderResult(committed = false) {
                   el('td', {}, String(r.row)),
                   el('td', {}, r.name || '—'),
                   el('td', {}, r.phone || '—'),
-                  el('td', {}, el('span', { class: `badge badge-${tone}` }, committed && r.status === 'new' ? 'Added' : label)),
+                  el('td', {}, el('span', { class: `badge badge-${tone}` }, committed && r.status === 'new' ? 'Added' : committed && r.status === 'converted' ? 'Made a member' : label)),
                   el('td', {}, r.message || (r.label ? r.label : ''))
                 )
               })
@@ -224,8 +237,8 @@ function renderResult(committed = false) {
         )
       : el('p', { class: 'muted' }, 'Nothing to show: every row is fine.')
   )
-  $('#imp-go').disabled = committed || c.new === 0
-  $('#imp-go').textContent = c.new === 1 ? 'Import 1 member' : `Import ${c.new} members`
+  $('#imp-go').disabled = committed || todo === 0
+  $('#imp-go').textContent = todo === 1 ? 'Import 1 person' : `Import ${todo} people`
   $('#imp-report').classList.toggle('hidden', problems === 0)
 }
 
@@ -234,16 +247,18 @@ function statBox(value, label) {
 }
 
 async function runImport() {
-  if (!lastResult || lastResult.counts.new === 0) return
-  const n = lastResult.counts.new
-  if (!confirm(`Add ${n} member${n === 1 ? '' : 's'} to the directory?`)) return
+  if (!lastResult) return
+  const { new: added, converted } = lastResult.counts
+  if (added + converted === 0) return
+  const what = [added ? `add ${added} new member${added === 1 ? '' : 's'}` : null, converted ? `make ${converted} existing visitor${converted === 1 ? ' a member' : 's members'}` : null].filter(Boolean).join(' and ')
+  if (!confirm(`Import now? This will ${what}.`)) return
   const button = $('#imp-go')
   button.disabled = true
   button.textContent = 'Importing…'
   try {
     lastResult = await callRpc('admin_import_members', { p_rows: parsed.rows, p_commit: true, ...options() })
     renderResult(true)
-    toast(`${lastResult.counts.new} member(s) imported`)
+    toast(`Import finished: ${lastResult.counts.new} added, ${lastResult.counts.converted} converted`)
     await onDone()
   } catch (e) {
     notice(e)
@@ -268,6 +283,35 @@ function downloadReport() {
   downloadFile('members-import-problems.csv', toCsv(columns, rows))
 }
 
+// ---------------------------------------------------------------------------
+// Excel files (.xlsx, .xls): read with SheetJS, loaded only when one is chosen.
+// The first sheet is used, and it looks exactly like the CSV table to the rest of the code.
+// ---------------------------------------------------------------------------
+function cellText(v) {
+  if (v instanceof Date) {
+    const p = (n) => String(n).padStart(2, '0')
+    return `${v.getFullYear()}-${p(v.getMonth() + 1)}-${p(v.getDate())}`
+  }
+  return v === null || v === undefined ? '' : String(v)
+}
+
+async function readSpreadsheet(file) {
+  let XLSX
+  try {
+    const mod = await import('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm')
+    XLSX = mod.default || mod
+  } catch {
+    throw new Error('The Excel reader could not be loaded (check your internet connection), or save the sheet as CSV and choose that file instead.')
+  }
+  const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true })
+  const sheet = workbook.Sheets[workbook.SheetNames[0]]
+  if (!sheet) throw new Error('The Excel file has no sheet in it.')
+  const grid = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '', blankrows: true })
+  return grid
+    .map((cells, i) => ({ line: i + 1, cells: cells.map(cellText) }))
+    .filter((r) => r.cells.some((c) => c.trim() !== ''))
+}
+
 async function chooseFile(e) {
   const file = e.target.files && e.target.files[0]
   parsed = null
@@ -277,8 +321,9 @@ async function chooseFile(e) {
   if (!file) return setChildren($('#imp-result'))
   try {
     if (file.size > 5 * 1024 * 1024) throw new Error('That file is too large. Import at most 2000 people at a time.')
-    const text = await file.text()
-    const { rows, skippedSamples } = readPeople(text)
+    const isExcel = /\.xlsx?$/i.test(file.name)
+    const table = isExcel ? await readSpreadsheet(file) : parseCsv(await file.text())
+    const { rows, skippedSamples } = readPeople(table)
     parsed = { fileName: file.name, rows, skippedSamples }
     $('#imp-file-note').textContent = `${file.name}: ${rows.length} ${rows.length === 1 ? 'person' : 'people'} found.`
     await check()
@@ -306,6 +351,7 @@ export function initImport({ onImported }) {
   $('#imp-file').addEventListener('change', chooseFile)
   $('#imp-create-dea').addEventListener('change', check)
   $('#imp-allow-similar').addEventListener('change', check)
+  $('#imp-force-match').addEventListener('change', check)
   $('#imp-show-all').addEventListener('change', () => lastResult && renderResult(lastResult.committed))
   $('#imp-go').addEventListener('click', runImport)
   $('#imp-report').addEventListener('click', downloadReport)

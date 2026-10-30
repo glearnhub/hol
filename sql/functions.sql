@@ -3163,11 +3163,14 @@ as $$
   end
 $$;
 
+drop function if exists public.admin_import_members(jsonb, boolean, boolean, boolean);
+
 create or replace function public.admin_import_members(
   p_rows jsonb,
   p_commit boolean default false,
   p_create_deaconesses boolean default false,
-  p_allow_similar boolean default false
+  p_allow_similar boolean default false,
+  p_force_match boolean default false
 )
 returns jsonb
 language plpgsql
@@ -3196,7 +3199,12 @@ declare
   v_existing public.people;
   v_dupes jsonb;
   v_person public.people;
+  m_phone public.people;
+  m_email public.people;
+  v_target public.people;
+  v_matched_by text;
   n_new integer := 0;
+  n_converted integer := 0;
   n_skipped integer := 0;
   n_error integer := 0;
 begin
@@ -3279,18 +3287,45 @@ begin
         end if;
       end if;
 
-      -- Phone numbers are never registered twice
+      -- Who already has this phone number or this email? A member is never added again. A
+      -- visitor becomes a member, keeping their record, registrations and attendance.
       if v_status = 'new' then
         if f.v_phone = any (v_seen_phones) then
           v_status := 'skipped';
           v_msg := 'The same phone number appears earlier in this file.';
         else
-          select * into v_existing from public.people where phone = f.v_phone or alt_phone = f.v_phone;
-          if found then
+          select * into m_phone from public.people
+          where phone = f.v_phone or alt_phone = f.v_phone
+          order by (phone = f.v_phone) desc limit 1;
+          if f.v_email is not null then
+            select * into m_email from public.people where lower(email) = f.v_email order by created_at limit 1;
+          else
+            m_email := null;
+          end if;
+
+          if m_phone.id is not null and m_email.id is not null and m_phone.id <> m_email.id then
             v_status := 'skipped';
-            v_msg := case when v_existing.kind = 'visitor'
-              then format('%s (%s) is already on record as a visitor. Convert them on the Visitors page.', v_existing.full_name, private.person_label(v_existing))
-              else format('%s (%s) is already registered with this phone number.', v_existing.full_name, private.person_label(v_existing)) end;
+            v_msg := format('The phone number belongs to %s (%s) but the email belongs to %s (%s). Check which is right.',
+                            m_phone.full_name, private.person_label(m_phone), m_email.full_name, private.person_label(m_email));
+          elsif m_phone.id is not null or m_email.id is not null then
+            if m_phone.id is not null then v_target := m_phone; else v_target := m_email; end if;
+            v_matched_by := case when m_phone.id is not null and m_email.id is not null then 'phone number and email'
+                                 when m_phone.id is not null then 'phone number' else 'email' end;
+            if v_target.kind = 'member' then
+              v_status := 'skipped';
+              v_msg := format('%s (%s) is already registered as a member (same %s).',
+                              v_target.full_name, private.person_label(v_target), v_matched_by);
+            elsif (m_phone.id is not null and m_email.id is not null)
+                  or private.names_compatible(v_target.full_name, f.v_name)
+                  or coalesce(p_force_match, false) then
+              v_status := 'converted';
+              v_msg := format('Already on record as visitor %s (%s), matched by %s. Becomes a member, with the details in the file added.',
+                              v_target.full_name, private.person_label(v_target), v_matched_by);
+            else
+              v_status := 'skipped';
+              v_msg := format('The %s matches visitor %s (%s) but the name in the file is different. If it is the same person, correct the name, or tick "convert visitors even if the name looks different".',
+                              v_matched_by, v_target.full_name, private.person_label(v_target));
+            end if;
           end if;
         end if;
       end if;
@@ -3305,12 +3340,12 @@ begin
         end if;
       end if;
 
-      -- Remember the numbers this file will add, so the same number twice is caught
-      if v_status = 'new' then
+      -- Remember the numbers this file will add or convert, so the same number twice is caught
+      if v_status in ('new', 'converted') then
         v_seen_phones := array_append(v_seen_phones, f.v_phone);
       end if;
 
-      if v_status = 'new' and p_commit then
+      if v_status in ('new', 'converted') and p_commit then
         if v_dea_name is not null and v_dea_id is null then
           select id into v_dea_id from public.deaconesses where lower(btrim(name)) = lower(v_dea_name);
           if v_dea_id is null then
@@ -3318,14 +3353,38 @@ begin
             returning id into v_dea_id;
           end if;
         end if;
-        insert into public.people
-          (kind, membership_type, full_name, phone, alt_phone, email, gender, membership_date, department,
-           residence, deaconess_id, church_name, notes, created_by)
-        values
-          ('member', coalesce(f.v_type, 'member'), f.v_name, f.v_phone, f.v_alt, f.v_email, f.v_gender,
-           coalesce(v_date, (now() at time zone private.event_tz())::date),
-           f.v_department, f.v_residence, v_dea_id, f.v_church, f.v_notes, 'admin:' || auth.uid()::text)
-        returning * into v_person;
+        if v_status = 'new' then
+          insert into public.people
+            (kind, membership_type, full_name, phone, alt_phone, email, gender, membership_date, department,
+             residence, deaconess_id, church_name, notes, created_by)
+          values
+            ('member', coalesce(f.v_type, 'member'), f.v_name, f.v_phone, f.v_alt, f.v_email, f.v_gender,
+             coalesce(v_date, (now() at time zone private.event_tz())::date),
+             f.v_department, f.v_residence, v_dea_id, f.v_church, f.v_notes, 'admin:' || auth.uid()::text)
+          returning * into v_person;
+        else
+          -- The same person row: what the file gives is added, what it leaves blank is kept,
+          -- and an old phone number is kept as the alternative one.
+          update public.people p
+          set kind = 'member', membership_type = coalesce(f.v_type, 'member'), status = 'active',
+              needs_review = false, review_note = null, became_member_at = now(),
+              full_name = f.v_name,
+              alt_phone = case when p.phone <> f.v_phone then coalesce(f.v_alt, nullif(p.alt_phone, f.v_phone), p.phone)
+                               else coalesce(f.v_alt, p.alt_phone) end,
+              phone = f.v_phone,
+              email = coalesce(f.v_email, p.email),
+              gender = coalesce(f.v_gender, p.gender),
+              department = coalesce(f.v_department, p.department),
+              residence = coalesce(f.v_residence, p.residence),
+              deaconess_id = coalesce(v_dea_id, p.deaconess_id),
+              church_name = coalesce(f.v_church, p.church_name),
+              notes = coalesce(f.v_notes, p.notes),
+              membership_date = coalesce(v_date, (now() at time zone private.event_tz())::date)
+          where p.id = v_target.id
+          returning * into v_person;
+          perform private.audit('admin:' || auth.uid()::text, 'visitor_converted', null,
+            jsonb_build_object('person_id', v_person.id, 'via', 'import', 'matched_by', v_matched_by));
+        end if;
         v_label := private.person_label(v_person);
       end if;
     exception when others then
@@ -3334,6 +3393,7 @@ begin
     end;
 
     if v_status = 'new' then n_new := n_new + 1;
+    elsif v_status = 'converted' then n_converted := n_converted + 1;
     elsif v_status = 'skipped' then n_skipped := n_skipped + 1;
     else n_error := n_error + 1;
     end if;
@@ -3345,12 +3405,12 @@ begin
 
   if p_commit then
     perform private.audit('admin:' || auth.uid()::text, 'members_imported', null,
-      jsonb_build_object('imported', n_new, 'skipped', n_skipped, 'errors', n_error));
+      jsonb_build_object('imported', n_new, 'converted_visitors', n_converted, 'skipped', n_skipped, 'errors', n_error));
   end if;
 
   return jsonb_build_object(
     'ok', true, 'committed', coalesce(p_commit, false),
-    'counts', jsonb_build_object('total', jsonb_array_length(p_rows), 'new', n_new, 'skipped', n_skipped, 'errors', n_error),
+    'counts', jsonb_build_object('total', jsonb_array_length(p_rows), 'new', n_new, 'converted', n_converted, 'skipped', n_skipped, 'errors', n_error),
     'new_deaconesses', to_jsonb(v_new_deaconesses),
     'rows', v_results);
 end;

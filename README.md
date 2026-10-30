@@ -427,6 +427,20 @@ On the **Members** page, **Import CSV** opens a three-step screen:
 3. **Import.** The rows that passed are saved in one go and the page updates. You can download a
    CSV of the rows that were not added, fix them, and import that file.
 
+You can choose the file as a CSV or as an Excel workbook (`.xlsx`; the first sheet is used, and
+phone numbers that Excel stored without their leading zero are understood).
+
+**People who are already visitors become members.** Each row is matched against everyone on
+record by **phone number or email**. A visitor who matches is turned into a member in place: it is
+the same record, so their registrations and attendance stay, past events still show them as a
+visitor, and they keep their member number. The details in your file are added; cells you leave
+blank keep what was there, and if the file has a different phone number the old one is kept as the
+alternative number. A match on **both** phone and email is certain. A match on only one of them
+needs a name that agrees; if the name is very different the row is held back with an explanation
+(tick "Make a visitor a member even if the name in the file looks different" to go ahead). A row
+whose phone belongs to one person and whose email belongs to another is never guessed at. People
+who are already **members** are never changed or added twice.
+
 Up to 2000 people per file. Only administrators can import.
 
 ### Events and their two links

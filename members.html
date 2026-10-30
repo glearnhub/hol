@@ -209,13 +209,13 @@
 
           <dialog id="import-dialog" class="wide-dialog" aria-labelledby="import-title">
             <div class="dialog-head">
-              <h2 id="import-title">Import members from a CSV file</h2>
+              <h2 id="import-title">Import members from a CSV or Excel file</h2>
               <button class="btn btn-outline btn-small" type="button" data-close>Close</button>
             </div>
             <div class="dialog-body">
               <ol class="import-steps">
                 <li>
-                  <strong>Download the template</strong> and fill in one person per row. Open it in Excel or Google Sheets and save it as <em>CSV</em> when you are done.
+                  <strong>Download the template</strong> and fill in one person per row. Open it in Excel or Google Sheets. You can choose the finished file as it is (<em>.xlsx</em>) or saved as <em>CSV</em>.
                   <div style="margin:.5rem 0"><button id="imp-template" class="btn btn-primary btn-small" type="button">Download the template</button></div>
                   <details class="import-help">
                     <summary>What goes in each column</summary>
@@ -226,21 +226,23 @@
                       <li><strong>Deaconess</strong>: her name exactly as it is in the Deaconesses list (capital letters do not matter).</li>
                       <li>Residence, Department, Alternative phone, Email, Church and Notes are optional.</li>
                       <li>The two sample rows in the template are ignored, so you can leave them in.</li>
+                      <li><strong>People who are already visitors</strong> are recognised by their <strong>phone number or email</strong> and made members automatically: their record, registrations and attendance stay, and the details in your file are added (anything you leave blank is kept as it was). People who are already members are never added twice.</li>
                     </ul>
                   </details>
                 </li>
                 <li>
                   <strong>Choose your file.</strong> It is checked straight away and <em>nothing is saved yet</em>.
                   <div class="field" style="margin:.5rem 0">
-                    <input id="imp-file" type="file" accept=".csv,text/csv,text/plain" />
+                    <input id="imp-file" type="file" accept=".csv,.xlsx,.xls,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" />
                     <div id="imp-file-note" class="hint"></div>
                   </div>
                   <label class="check-inline"><input id="imp-create-dea" type="checkbox" /> Add deaconesses that are not in the list yet</label>
-                  <label class="check-inline"><input id="imp-allow-similar" type="checkbox" /> Import rows with a similar name anyway (otherwise they are held back to check)</label>
+                  <label class="check-inline"><input id="imp-allow-similar" type="checkbox" /> Add rows with a similar name as new people anyway (otherwise they are held back to check)</label>
+                  <label class="check-inline"><input id="imp-force-match" type="checkbox" /> Make a visitor a member even if the name in the file looks different, when only the phone or the email matches</label>
                   <label class="check-inline"><input id="imp-show-all" type="checkbox" /> Show every row, not only the problems</label>
                 </li>
                 <li>
-                  <strong>Look at the result, then import.</strong> People who are already registered are never added twice.
+                  <strong>Look at the result, then import.</strong> Nothing changes until you press the Import button.
                 </li>
               </ol>
               <div id="imp-result" aria-live="polite"></div>

@@ -1047,8 +1047,9 @@ check('the type Visitor is refused (this import is for members)', byLine(dry, 10
 check('a date that is not year-month-day is an error that says how to fix it', byLine(dry, 11).status === 'error' && /year-month-day/.test(byLine(dry, 11).message))
 check('a similar name is held back for review, not imported silently', byLine(dry, 12).status === 'skipped' && /Possible duplicate/.test(byLine(dry, 12).message))
 check('an unknown gender is an error', byLine(dry, 13).status === 'error')
-check('an existing visitor is pointed to the Visitors page', byLine(dry, 14).status === 'skipped' && /Visitors page/.test(byLine(dry, 14).message))
-check('the counts add up', dry.counts.total === 13 && dry.counts.new === 2 && dry.counts.new + dry.counts.skipped + dry.counts.errors === 13, JSON.stringify(dry.counts))
+check('a visitor matched only by phone, under a very different name, is held back for a look',
+  byLine(dry, 14).status === 'skipped' && /visitor/.test(byLine(dry, 14).message) && /name/.test(byLine(dry, 14).message), byLine(dry, 14).message)
+check('the counts add up', dry.counts.total === 13 && dry.counts.new === 2 && dry.counts.new + dry.counts.converted + dry.counts.skipped + dry.counts.errors === 13, JSON.stringify(dry.counts))
 
 const done = await A('admin_import_members', { p_rows: importRows, p_commit: true })
 check('importing saves exactly the good rows', done.committed === true && done.counts.new === 2 && (await peopleCount()) === before + 2)
@@ -1088,6 +1089,82 @@ check('the import is for administrators only', await denied(() => M('admin_impor
 check('the import is not public', await denied(() => as('anon', () => rpc('admin_import_members', { p_rows: importRows }))))
 check('imported members are found by ushers like any other',
   (await U('volunteer_search_people', { p_token: ushTok, p_query: 'Import Two' }, '10.8.9.9')).results.some((r) => r.full_name === 'Import Two'))
+
+// ---- 8.10 An import turns matching visitors into members ----------------------------------------------------
+const mkVisitor = async (name, phone, email = null) =>
+  (await db.query(`insert into public.people (kind, full_name, phone, email, church_name) values ('visitor', $1, $2, $3, 'Old Church') returning id`, [name, phone, email])).rows[0].id
+const vA = await mkVisitor('Convert Ann Wanjiku', '+254788000010', 'ann@example.com')
+const vB = await mkVisitor('Convert Beth Atieno', '+254788000011', 'beth@example.com')
+const vC = await mkVisitor('Convert Carol Muthoni', '+254788000012', 'carol@example.com')
+const vD = await mkVisitor('Convert Dina Akinyi', '+254788000013')
+const vE = await mkVisitor('Convert Esther Otieno', '+254788000014', 'eo@example.com')
+const vF = await mkVisitor('Convert Fiona Njeri', '+254788000015', 'fiona@example.com')
+const vG = await mkVisitor('Convert Gloria Achieng', '+254788000016', 'gloria@example.com')
+// history that must survive: one registration and one attendance for visitor A
+const regA = (await db.query(`insert into public.registrations (event_id, person_id, classification, full_name, email, phone, church_name, registration_reference, qr_token_hash, consented_at)
+  values ($1, $2, 'visitor', 'Convert Ann Wanjiku', 'ann@example.com', '+254788000010', 'Old Church', 'HOL-CONV0001', 'convhash0001', now()) returning id`, [evPub, vA])).rows[0].id
+await db.query(`insert into public.attendance (event_id, person_id, registration_id, method, checked_in_by) values ($1, $2, $3, 'admin', 'test')`, [evPub, vA, regA])
+const personNo = async (id) => (await db.query(`select person_no from public.people where id = $1`, [id])).rows[0].person_no
+
+const convRows = [
+  { line: 2, full_name: 'Convert Ann Wanjiku', phone: '0788 000 010', department: 'Ushers', residence: 'Ruaka', membership_type: 'In Commitment Class', deaconess: 'Deaconess Grace' },  // phone match, same name
+  { line: 3, full_name: 'Convert Beth Atieno', phone: '0788 000 099', email: 'BETH@example.com' },                                                                         // email match only, new phone
+  { line: 4, full_name: 'Totally Different Name', phone: '0788 000 012', email: 'carol@example.com' },                                                                       // phone AND email match, name differs
+  { line: 5, full_name: 'Someone Else Entirely', phone: '0788 000 013' },                                                                                                       // phone only, name differs
+  { line: 6, full_name: 'Convert Esther Otieno', phone: '0788 000 014', email: 'eo@example.com' },                                                                            // visitor with an email on record, no extra details
+  { line: 7, full_name: 'Convert Fiona Njeri', phone: '0788 000 015', email: 'gloria@example.com' },                                                                          // phone is Fiona's, email is Gloria's: ambiguous
+  { line: 8, full_name: 'Esther Wambui Kamau', phone: '0788 000 098', email: 'esther.k@example.com' },                                                                       // email belongs to an existing MEMBER
+]
+const convDry = await A('admin_import_members', { p_rows: convRows })
+const kindOf = async (id) => (await db.query(`select kind from public.people where id = $1`, [id])).rows[0].kind
+check('the check says which visitors will be converted, and saves nothing',
+  convDry.counts.converted === 4 && convDry.rows.filter((r) => r.status === 'converted').length === 4 && (await kindOf(vA)) === 'visitor',
+  JSON.stringify(convDry.rows.map((r) => [r.row, r.status])))
+check('a visitor is recognised by phone number (same name)', byLine(convDry, 2).status === 'converted' && /phone number/.test(byLine(convDry, 2).message))
+check('a visitor is recognised by email alone, even with a new phone number', byLine(convDry, 3).status === 'converted' && /email/.test(byLine(convDry, 3).message))
+check('phone AND email matching is enough even when the name is different', byLine(convDry, 4).status === 'converted')
+check('a single match under a very different name is held back', byLine(convDry, 5).status === 'skipped' && /name/.test(byLine(convDry, 5).message))
+check('a phone and an email that belong to two different people are not guessed at',
+  byLine(convDry, 7).status === 'skipped' && /Check which is right/.test(byLine(convDry, 7).message), byLine(convDry, 7).message)
+check('an email that belongs to an existing member is never added again', byLine(convDry, 8).status === 'skipped')
+
+const noAnn = await personNo(vA)
+const convDone = await A('admin_import_members', { p_rows: convRows, p_commit: true })
+check('importing converts them', convDone.counts.converted === 4 && (await kindOf(vA)) === 'member' && (await kindOf(vB)) === 'member' && (await kindOf(vC)) === 'member')
+check('the person keeps their own record and member number (no second profile)',
+  (await personNo(vA)) === noAnn && (await peopleByPhone('+254788000010')) === 1 && /^M-/.test(byLine(convDone, 2).label))
+const annRow = (await db.query(`select membership_type, department, residence, deaconess_id, email, church_name, status from public.people where id = $1`, [vA])).rows[0]
+check('the details from the file are added (type, department, residence, deaconess)',
+  annRow.membership_type === 'in_commitment' && annRow.department === 'Ushers' && annRow.residence === 'Ruaka' && annRow.deaconess_id === dGrace)
+check('what the file leaves blank is kept (email and church)', annRow.email === 'ann@example.com' && annRow.church_name === 'Old Church')
+const bethRow = (await db.query(`select phone, alt_phone, email from public.people where id = $1`, [vB])).rows[0]
+check('a changed phone number takes the new number and keeps the old one as the alternative',
+  bethRow.phone === '+254788000099' && bethRow.alt_phone === '+254788000011' && bethRow.email === 'beth@example.com', JSON.stringify(bethRow))
+check('registrations and attendance stay attached to the person',
+  (await db.query(`select count(*)::int n from public.registrations where person_id = $1`, [vA])).rows[0].n === 1
+  && (await db.query(`select count(*)::int n from public.attendance where person_id = $1`, [vA])).rows[0].n === 1)
+const annReport = await A('admin_event_attendance_report', { p_event_id: evPub })
+check('the old event still lists them as a visitor, now marked as a member since',
+  annReport.attended_visitors.some((v) => v.person_id === vA && v.now_member === true) && !annReport.attended_members.some((m) => m.person_id === vA))
+check('held-back rows were not changed', (await kindOf(vD)) === 'visitor' && (await kindOf(vF)) === 'visitor')
+check('the conversions are in the audit log',
+  (await db.query(`select count(*)::int n from public.audit_log where action = 'visitor_converted' and details ->> 'via' = 'import'`)).rows[0].n === 4)
+const again2 = await A('admin_import_members', { p_rows: convRows, p_commit: true })
+check('running the same file again changes nothing more', again2.counts.converted === 0 && again2.counts.new === 0)
+
+const forced = await A('admin_import_members', { p_rows: [convRows[3]], p_force_match: true, p_commit: true })
+check('the administrator can confirm a match even when the name looks different',
+  forced.counts.converted === 1 && (await kindOf(vD)) === 'member')
+const wanji = (await db.query(`select id from public.people where phone = '+254755666777'`)).rows[0].id
+const walkinImport = await A('admin_import_members', { p_rows: [{ line: 2, full_name: 'Walk In Wanjiru', phone: '0755 666 777', residence: 'Zimmerman', department: 'Hospitality' }], p_commit: true })
+check('a visitor who only ever attended as a walk-in is converted too',
+  walkinImport.counts.converted === 1 && (await kindOf(wanji)) === 'member'
+  && (await db.query(`select count(*)::int n from public.attendance where person_id = $1 and classification = 'visitor'`, [wanji])).rows[0].n >= 1)
+const mixed = await A('admin_import_members', { p_rows: [
+  { line: 2, full_name: 'Zulu Quartz Person', phone: '0788 000 050' },
+  { line: 3, full_name: 'Convert Gloria Achieng', phone: '0788 000 016' },
+] })
+check('new people and converted visitors can be in the same file', mixed.counts.new === 1 && mixed.counts.converted === 1, JSON.stringify(mixed.rows))
 }
 console.log(`\n${passed} passed, ${failed} failed`)
 process.exit(failed ? 1 : 0)
