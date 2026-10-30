@@ -22,7 +22,7 @@
           <div class="page-title">
             <div>
               <h1>Deaconesses</h1>
-              <div class="muted">The leaders assigned to mentor members. Add them here once; when you register or edit a member you simply choose one from this list.</div>
+              <div class="muted">The leaders assigned to mentor members, and the group each one leads. Add them here once; when you register or edit a member you simply choose one from this list.</div>
             </div>
             <div class="row-actions">
               <button id="add-deaconess" class="btn btn-primary" type="button">+ Add deaconess</button>
@@ -44,6 +44,12 @@
               <div class="field" data-field="name">
                 <label for="d-name">Name</label>
                 <input id="d-name" name="name" type="text" maxlength="100" autocomplete="off" placeholder="For example Deaconess Grace Njeri" required />
+                <div class="error"></div>
+              </div>
+              <div class="field" data-field="group_name">
+                <label for="d-group">Group name (optional)</label>
+                <input id="d-group" name="group_name" type="text" maxlength="100" autocomplete="off" placeholder="For example DAUGHTERS OF FAITH" />
+                <div class="hint">The name of the group she leads. You can change it whenever the group changes its name; everyone in the group follows.</div>
                 <div class="error"></div>
               </div>
               <div class="field" data-field="phone">

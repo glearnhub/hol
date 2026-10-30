@@ -42,7 +42,7 @@ function render() {
     el(
       'table',
       { class: 'data' },
-      el('thead', {}, el('tr', {}, ...['Deaconess', 'Phone', 'Members mentored', 'Status', ''].map((h) => el('th', {}, h)))),
+      el('thead', {}, el('tr', {}, ...['Deaconess', 'Group', 'Phone', 'Members mentored', 'Status', ''].map((h) => el('th', {}, h)))),
       el(
         'tbody',
         {},
@@ -51,6 +51,7 @@ function render() {
             'tr',
             {},
             el('td', {}, el('strong', {}, d.name)),
+            el('td', {}, d.group_name ? el('strong', {}, d.group_name) : el('span', { class: 'muted' }, 'No group name')),
             el('td', {}, d.phone || '—'),
             el(
               'td',
@@ -101,6 +102,7 @@ function openForm(d = null) {
   $('#dea-submit').textContent = d ? 'Save changes' : 'Save deaconess'
   if (d) {
     form.name.value = d.name
+    form.group_name.value = d.group_name || ''
     form.phone.value = d.phone || ''
     form.active.checked = d.active
   }
@@ -120,6 +122,7 @@ async function save(e) {
   try {
     const { data, error } = await supabase.rpc('admin_save_deaconess', {
       p_name: name,
+      p_group_name: form.group_name.value.trim() || null,
       p_phone: form.phone.value.trim() || null,
       p_id: editing ? editing.id : null,
       p_active: form.active.checked,
@@ -144,7 +147,7 @@ async function save(e) {
 async function setActive(d, active) {
   if (!active && !confirm(`Deactivate ${d.name}? She stays on the members she already mentors but will not be offered for new members.`)) return
   try {
-    await callRpc('admin_save_deaconess', { p_name: d.name, p_phone: d.phone, p_id: d.id, p_active: active })
+    await callRpc('admin_save_deaconess', { p_name: d.name, p_group_name: d.group_name, p_phone: d.phone, p_id: d.id, p_active: active })
     toast(active ? `${d.name} is active again` : `${d.name} deactivated`)
     await load()
   } catch (err) {

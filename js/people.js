@@ -143,6 +143,7 @@ function row(p) {
             {},
             p.department ? el('div', {}, el('strong', {}, p.department)) : null,
             p.deaconess ? el('div', { class: 'muted' }, `Deaconess: ${p.deaconess}`) : null,
+            p.deaconess_group ? el('div', { class: 'muted' }, `Group: ${p.deaconess_group}`) : null,
             p.residence ? el('div', { class: 'muted' }, p.residence) : null,
             !p.department && !p.deaconess && !p.residence ? '—' : null
           ),
@@ -209,6 +210,7 @@ async function exportCsv() {
       { header: 'Residence', value: (p) => p.residence || '' },
       { header: 'Department', value: (p) => p.department || '' },
       { header: 'Deaconess', value: (p) => p.deaconess || '' },
+      { header: 'Deaconess group', value: (p) => p.deaconess_group || '' },
       { header: 'Church', value: (p) => p.church_name || '' },
       { header: 'Membership date', value: (p) => (p.membership_date ? String(p.membership_date).slice(0, 10) : '') },
       { header: 'Status', value: (p) => p.status },
@@ -432,6 +434,7 @@ async function openProfile(id, year = null) {
     p.residence ? ['Residence', p.residence] : null,
     p.department ? ['Department', p.department] : null,
     p.deaconess ? ['Deaconess', p.deaconess] : null,
+    p.deaconess_group ? ['Deaconess\'s group', p.deaconess_group] : null,
     p.email ? ['Email', p.email] : null,
     p.gender ? ['Gender', p.gender] : null,
     p.church_name ? ['Church', p.church_name] : null,
@@ -571,13 +574,15 @@ export async function initPeople(mode) {
 // The deaconess dropdown in the form: the active deaconesses, plus the person's current one
 // even if she has been deactivated since, so editing never silently drops her.
 let deaconesses = []
+// "Deaconess Ivy Kituku — DAUGHTERS OF FAITH", with (inactive) when she is no longer offered.
+const deaconessLabel = (d) => `${d.name}${d.group_name ? ` — ${d.group_name}` : ''}${d.active ? '' : ' (inactive)'}`
 function fillDeaconessSelect(currentId) {
   const select = $('#p-deaconess')
   select.replaceChildren(
     el('option', { value: '' }, 'No deaconess assigned'),
     ...deaconesses
       .filter((d) => d.active || d.id === currentId)
-      .map((d) => el('option', { value: d.id }, d.active ? d.name : `${d.name} (inactive)`))
+      .map((d) => el('option', { value: d.id }, deaconessLabel(d)))
   )
   select.value = currentId || ''
 }
@@ -597,7 +602,7 @@ async function loadOptions() {
     deaconesses = dl.rows
     $('#f-deaconess').replaceChildren(
       el('option', { value: '' }, 'All deaconesses'),
-      ...deaconesses.map((d) => el('option', { value: d.id }, d.active ? d.name : `${d.name} (inactive)`))
+      ...deaconesses.map((d) => el('option', { value: d.id }, deaconessLabel(d)))
     )
     // A link from the Deaconesses page (members.html?deaconess=...) opens already filtered.
     const wanted = new URLSearchParams(window.location.search).get('deaconess')

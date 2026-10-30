@@ -2534,7 +2534,7 @@ begin
     join public.events e on e.id = a.event_id
     group by a.person_id
   ), base as (
-    select p.*, private.person_label(p) as label, dc.name as deaconess_name, coalesce(t.attended_total, 0) as attended_total,
+    select p.*, private.person_label(p) as label, dc.name as deaconess_name, dc.group_name as deaconess_group, coalesce(t.attended_total, 0) as attended_total,
            coalesce(t.attended_range, 0) as attended_range, t.last_attended,
            (select count(*) from public.registrations r where r.person_id = p.id)::integer as registrations
     from public.people p
@@ -2552,6 +2552,7 @@ begin
         or lower(p.full_name) like '%' || private.escape_like(s) || '%' escape '\'
         or lower(coalesce(p.department, '')) like '%' || private.escape_like(s) || '%' escape '\'
         or lower(coalesce(dc.name, '')) like '%' || private.escape_like(s) || '%' escape '\'
+        or lower(coalesce(dc.group_name, '')) like '%' || private.escape_like(s) || '%' escape '\'
         or lower(coalesce(p.residence, '')) like '%' || private.escape_like(s) || '%' escape '\'
         or (char_length(s_digits) >= 3 and (p.phone like '%' || s_digits || '%' or p.alt_phone like '%' || s_digits || '%'))
       )
@@ -2576,7 +2577,7 @@ begin
     join public.events e on e.id = a.event_id
     group by a.person_id
   ), base as (
-    select p.*, private.person_label(p) as label, dc.name as deaconess_name, coalesce(t.attended_total, 0) as attended_total,
+    select p.*, private.person_label(p) as label, dc.name as deaconess_name, dc.group_name as deaconess_group, coalesce(t.attended_total, 0) as attended_total,
            coalesce(t.attended_range, 0) as attended_range, t.last_attended,
            (select count(*) from public.registrations r where r.person_id = p.id)::integer as registrations
     from public.people p
@@ -2594,6 +2595,7 @@ begin
         or lower(p.full_name) like '%' || private.escape_like(s) || '%' escape '\'
         or lower(coalesce(p.department, '')) like '%' || private.escape_like(s) || '%' escape '\'
         or lower(coalesce(dc.name, '')) like '%' || private.escape_like(s) || '%' escape '\'
+        or lower(coalesce(dc.group_name, '')) like '%' || private.escape_like(s) || '%' escape '\'
         or lower(coalesce(p.residence, '')) like '%' || private.escape_like(s) || '%' escape '\'
         or (char_length(s_digits) >= 3 and (p.phone like '%' || s_digits || '%' or p.alt_phone like '%' || s_digits || '%'))
       )
@@ -2621,7 +2623,7 @@ begin
     'membership_type', o.membership_type,
     'full_name', o.full_name, 'phone', o.phone, 'alt_phone', o.alt_phone, 'email', o.email,
     'gender', o.gender, 'church_name', o.church_name, 'department', o.department,
-    'residence', o.residence, 'deaconess_id', o.deaconess_id, 'deaconess', o.deaconess_name,
+    'residence', o.residence, 'deaconess_id', o.deaconess_id, 'deaconess', o.deaconess_name, 'deaconess_group', o.deaconess_group,
     'membership_date', o.membership_date, 'status', o.status, 'needs_review', o.needs_review,
     'review_note', o.review_note, 'notes', o.notes, 'became_member_at', o.became_member_at,
     'created_at', o.created_at, 'attended_total', o.attended_total, 'attended_range', o.attended_range,
@@ -2649,7 +2651,7 @@ declare
 begin
   perform private.require_admin();
   select coalesce(jsonb_agg(jsonb_build_object(
-    'id', d.id, 'name', d.name, 'phone', d.phone, 'active', d.active, 'created_at', d.created_at,
+    'id', d.id, 'name', d.name, 'group_name', d.group_name, 'phone', d.phone, 'active', d.active, 'created_at', d.created_at,
     'members', (select count(*) from public.people p where p.deaconess_id = d.id and p.kind = 'member'),
     'inactive_members', (select count(*) from public.people p where p.deaconess_id = d.id and p.kind = 'member' and p.status = 'inactive')
   ) order by d.active desc, lower(d.name)), '[]'::jsonb) into v_rows
@@ -2660,11 +2662,14 @@ $$;
 
 -- Adds a deaconess (p_id null) or edits one. Deactivating keeps her on the members she
 -- already mentors but stops her being offered for new ones.
+drop function if exists public.admin_save_deaconess(text, text, uuid, boolean);
+
 create or replace function public.admin_save_deaconess(
   p_name text,
   p_phone text default null,
   p_id uuid default null,
-  p_active boolean default true
+  p_active boolean default true,
+  p_group_name text default null
 )
 returns jsonb
 language plpgsql
@@ -2675,7 +2680,9 @@ as $$
 declare
   v_name text := private.clean_text(p_name, 100);
   v_phone text := case when nullif(btrim(coalesce(p_phone, '')), '') is null then null else private.normalize_phone(p_phone) end;
+  v_group text := private.clean_text(p_group_name, 100);
   other public.deaconesses;
+  old public.deaconesses;
   d public.deaconesses;
 begin
   perform private.require_admin();
@@ -2694,17 +2701,23 @@ begin
   end if;
 
   if p_id is null then
-    insert into public.deaconesses (name, phone, active, created_by)
-    values (v_name, v_phone, coalesce(p_active, true), 'admin:' || auth.uid()::text)
+    insert into public.deaconesses (name, group_name, phone, active, created_by)
+    values (v_name, v_group, v_phone, coalesce(p_active, true), 'admin:' || auth.uid()::text)
     returning * into d;
     perform private.audit('admin:' || auth.uid()::text, 'deaconess_added', null, jsonb_build_object('deaconess_id', d.id));
   else
-    update public.deaconesses set name = v_name, phone = v_phone, active = coalesce(p_active, true)
-    where id = p_id returning * into d;
-    if d.id is null then
+    select * into old from public.deaconesses where id = p_id for update;
+    if not found then
       return private.fail('not_found', 'Deaconess not found.');
     end if;
+    update public.deaconesses set name = v_name, group_name = v_group, phone = v_phone, active = coalesce(p_active, true)
+    where id = p_id returning * into d;
     perform private.audit('admin:' || auth.uid()::text, 'deaconess_updated', null, jsonb_build_object('deaconess_id', d.id));
+    -- A change of group name is recorded with the old and the new name.
+    if old.group_name is distinct from d.group_name then
+      perform private.audit('admin:' || auth.uid()::text, 'deaconess_group_renamed', null,
+        jsonb_build_object('deaconess_id', d.id, 'from', old.group_name, 'to', d.group_name));
+    end if;
   end if;
   return jsonb_build_object('ok', true, 'id', d.id);
 end;
@@ -2793,7 +2806,8 @@ begin
     'ok', true,
     'person', to_jsonb(p) - 'person_no' || jsonb_build_object(
       'label', private.person_label(p),
-      'deaconess', (select d.name from public.deaconesses d where d.id = p.deaconess_id)),
+      'deaconess', (select d.name from public.deaconesses d where d.id = p.deaconess_id),
+      'deaconess_group', (select d.group_name from public.deaconesses d where d.id = p.deaconess_id)),
     'year', v_year, 'year_total', v_year_total,
     'years', v_years, 'history', v_history, 'registrations', v_regs
   );
@@ -3196,6 +3210,7 @@ declare
   v_dea_name text;
   v_dea_id uuid;
   v_dea public.deaconesses;
+  v_dea_count integer;
   v_existing public.people;
   v_dupes jsonb;
   v_person public.people;
@@ -3269,8 +3284,16 @@ begin
       -- The deaconess is looked up by name in the list
       v_dea_name := private.clean_text(r.v ->> 'deaconess', 100);
       if v_status = 'new' and v_dea_name is not null then
-        select * into v_dea from public.deaconesses where lower(btrim(name)) = lower(v_dea_name);
-        if found then
+        -- Her name, or the name of her group, both find her
+        select count(*) into v_dea_count from public.deaconesses
+        where lower(btrim(name)) = lower(v_dea_name) or lower(btrim(coalesce(group_name, ''))) = lower(v_dea_name);
+        select * into v_dea from public.deaconesses
+        where lower(btrim(name)) = lower(v_dea_name) or lower(btrim(coalesce(group_name, ''))) = lower(v_dea_name)
+        order by (lower(btrim(name)) = lower(v_dea_name)) desc, name limit 1;
+        if v_dea_count > 1 and lower(btrim(v_dea.name)) <> lower(v_dea_name) then
+          v_status := 'error';
+          v_msg := format('"%s" matches more than one deaconess. Use her own name.', v_dea_name);
+        elsif found then
           if not v_dea.active then
             v_status := 'error';
             v_msg := format('Deaconess "%s" is inactive, so she cannot be given new members.', v_dea.name);
@@ -3283,7 +3306,7 @@ begin
           end if;
         else
           v_status := 'error';
-          v_msg := format('Deaconess "%s" is not in the list. Add her under Deaconesses first, or tick the option to add new deaconesses.', v_dea_name);
+          v_msg := format('Deaconess "%s" is not in the list (her name or her group name). Add her under Deaconesses first, or tick the option to add new deaconesses.', v_dea_name);
         end if;
       end if;
 

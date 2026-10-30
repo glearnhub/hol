@@ -398,7 +398,11 @@ Besides name, phone, email, gender, church and notes, each person has:
 * **Residence:** where they live, for example "Kasarani, Nairobi".
 * **Department:** where they serve in church. (This is the field that used to be called
   "ministry"; whatever was typed there is kept.)
-* **Deaconess:** the leader assigned to mentor them, chosen from a list. The administrator
+* **Deaconess:** the leader assigned to mentor them, chosen from a list. Each deaconess also has a
+  **group name** (for example "Deaconess Ivy Kituku — DAUGHTERS OF FAITH"). Edit the deaconess
+  to change the group name whenever the group is renamed: everyone in the group follows
+  automatically, nobody has to be edited, and the old and new names are kept in the audit log. Members
+  can be searched by group name, and an import can name the group instead of the deaconess. The administrator
   keeps that list under **Deaconesses** (add a name once, edit it, deactivate or remove it);
   when registering or editing a member you just pick from the dropdown, so names are always
   spelled the same way. A deactivated deaconess keeps her current members but is not offered for

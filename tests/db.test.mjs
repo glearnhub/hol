@@ -1165,6 +1165,46 @@ const mixed = await A('admin_import_members', { p_rows: [
   { line: 3, full_name: 'Convert Gloria Achieng', phone: '0788 000 016' },
 ] })
 check('new people and converted visitors can be in the same file', mixed.counts.new === 1 && mixed.counts.converted === 1, JSON.stringify(mixed.rows))
+
+// ---- 8.11 Each deaconess leads a group with a name that can change ------------------------------------------------
+const ivyRes = await A('admin_save_deaconess', { p_name: 'Deaconess Ivy Kituku', p_group_name: 'DAUGHTERS OF FAITH', p_phone: '0722 111 000' })
+const ivy = ivyRes.id
+check('a deaconess is saved together with the name of her group', ivyRes.ok === true)
+const ivyRow = (await A('admin_list_deaconesses', {})).rows.find((d) => d.id === ivy)
+check('the list shows her group', ivyRow.group_name === 'DAUGHTERS OF FAITH' && ivyRow.name === 'Deaconess Ivy Kituku')
+const ladyA = await A('admin_create_member', { p_full_name: 'Gwendolyn Odhiambo', p_phone: '0722 111 001', p_deaconess_id: ivy })
+const ladyB = await A('admin_create_member', { p_full_name: 'Hortensia Mwende', p_phone: '0722 111 002', p_deaconess_id: ivy })
+const inGroup = await A('admin_list_people', { p_kind: 'member', p_deaconess_id: ivy })
+check('members of her group show the group name',
+  inGroup.total === 2 && inGroup.rows.every((r) => r.deaconess === 'Deaconess Ivy Kituku' && r.deaconess_group === 'DAUGHTERS OF FAITH'))
+check('the profile shows the group too', (await A('admin_get_person', { p_id: ladyA.id })).person.deaconess_group === 'DAUGHTERS OF FAITH')
+check('members can be found by searching for the group name',
+  (await A('admin_list_people', { p_kind: 'member', p_search: 'daughters of' })).rows.length === 2)
+
+const renamed2 = await A('admin_save_deaconess', { p_id: ivy, p_name: 'Deaconess Ivy Kituku', p_phone: '0722 111 000', p_group_name: 'Women of Valour' })
+check('the group can be renamed', renamed2.ok === true)
+const afterRename = await A('admin_list_people', { p_kind: 'member', p_deaconess_id: ivy })
+check('renaming the group renames it for everyone in it, and nobody moves',
+  afterRename.total === 2 && afterRename.rows.every((r) => r.deaconess_group === 'Women of Valour'))
+check('the old group name no longer finds them', (await A('admin_list_people', { p_kind: 'member', p_search: 'daughters of' })).rows.length === 0)
+const renameAudit = (await db.query(`select details from public.audit_log where action = 'deaconess_group_renamed' order by id desc limit 1`)).rows[0].details
+check('the rename is recorded with the old and the new name', renameAudit.from === 'DAUGHTERS OF FAITH' && renameAudit.to === 'Women of Valour', JSON.stringify(renameAudit))
+const noChange = await A('admin_save_deaconess', { p_id: ivy, p_name: 'Deaconess Ivy Kituku', p_phone: '0722 111 000', p_group_name: 'Women of Valour' })
+check('saving without changing the group does not log a rename',
+  noChange.ok && (await db.query(`select count(*)::int n from public.audit_log where action = 'deaconess_group_renamed' and details ->> 'deaconess_id' = $1`, [ivy])).rows[0].n === 1)
+await A('admin_save_deaconess', { p_id: ivy, p_name: 'Deaconess Ivy Kituku', p_group_name: '' })
+check('the group can be cleared', (await A('admin_list_deaconesses', {})).rows.find((d) => d.id === ivy).group_name === null)
+await A('admin_save_deaconess', { p_id: ivy, p_name: 'Deaconess Ivy Kituku', p_group_name: 'Daughters of Faith' })
+
+// the import understands her group's name as well as her own
+const byGroup = await A('admin_import_members', { p_rows: [{ line: 2, full_name: 'Import By Group Zebra', phone: '0722 111 010', deaconess: 'daughters of faith' }], p_commit: true })
+check('an import can name the group instead of the deaconess',
+  byGroup.counts.new === 1 && (await db.query(`select deaconess_id from public.people where phone = '+254722111010'`)).rows[0].deaconess_id === ivy)
+const ivy2 = (await A('admin_save_deaconess', { p_name: 'Deaconess Second Leader', p_group_name: 'Daughters of Faith' })).id
+const ambiguous = await A('admin_import_members', { p_rows: [{ line: 2, full_name: 'Import Ambiguous Yankee', phone: '0722 111 011', deaconess: 'Daughters of Faith' }] })
+check('a group name shared by two deaconesses is not guessed at', byLine(ambiguous, 2).status === 'error' && /more than one/.test(byLine(ambiguous, 2).message), JSON.stringify(ambiguous.rows))
+const exact = await A('admin_import_members', { p_rows: [{ line: 2, full_name: 'Import Exact Xray', phone: '0722 111 012', deaconess: 'Deaconess Second Leader' }] })
+check('her own name always works', exact.counts.new === 1)
 }
 console.log(`\n${passed} passed, ${failed} failed`)
 process.exit(failed ? 1 : 0)

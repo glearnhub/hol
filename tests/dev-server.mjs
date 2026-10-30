@@ -90,8 +90,9 @@ await db.query(`select set_config('request.jwt.claim.sub', '', false)`)
 
 // Members, visitors and a few past meetings this year, so the new pages have data to show.
 const deaconessId = {}
+const GROUPS = { 'Deaconess Grace': 'DAUGHTERS OF FAITH', 'Deaconess Ruth': 'Women of Valour' }
 for (const name of ['Deaconess Grace', 'Deaconess Ruth']) {
-  deaconessId[name] = (await db.query(`insert into public.deaconesses (name) values ($1) returning id`, [name])).rows[0].id
+  deaconessId[name] = (await db.query(`insert into public.deaconesses (name, group_name) values ($1, $2) returning id`, [name, GROUPS[name]])).rows[0].id
 }
 const person = async (kind, name, phone, department = null, deaconess = null, residence = null, type = null) =>
   (await db.query(

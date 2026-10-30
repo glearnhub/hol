@@ -352,6 +352,14 @@ create table if not exists public.deaconesses (
 );
 create unique index if not exists deaconesses_name_uq on public.deaconesses (lower(btrim(name)));
 
+-- Each deaconess leads a group of ladies, and the group has a name that can change
+-- (for example "Daughters of Faith"). Members point at the deaconess, so renaming the
+-- group renames it for everyone in it.
+alter table public.deaconesses add column if not exists group_name text;
+alter table public.deaconesses drop constraint if exists deaconesses_group_name_check;
+alter table public.deaconesses add constraint deaconesses_group_name_check
+  check (group_name is null or char_length(group_name) <= 100);
+
 drop trigger if exists deaconesses_touch_updated_at on public.deaconesses;
 create trigger deaconesses_touch_updated_at
   before update on public.deaconesses
