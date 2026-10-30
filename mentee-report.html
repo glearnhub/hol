@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="robots" content="noindex" />
+    <title>Mentee report · Handmaidens of the Lord</title>
+    <link rel="icon" type="image/png" sizes="64x64" href="img/favicon-64.png" />
+    <link rel="apple-touch-icon" href="img/apple-touch-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/styles.css" />
+    <link rel="stylesheet" href="css/admin.css" />
+  </head>
+  <body class="admin">
+    <div class="admin-layout">
+      <aside id="admin-sidebar" aria-label="Administration menu"></aside>
+      <div class="admin-content">
+        <header id="admin-topbar"></header>
+        <main id="page" class="hidden">
+          <div class="page-title no-print">
+            <div>
+              <h1>Mentee report</h1>
+              <div class="muted">Every deaconess with the members she mentors listed under her.</div>
+            </div>
+            <div class="row-actions">
+              <a class="btn btn-outline" href="deaconesses.html">← Deaconesses</a>
+              <button id="print" class="btn btn-primary" type="button">Print / save as PDF</button>
+              <button id="export" class="btn btn-outline" type="button">Export CSV</button>
+            </div>
+          </div>
+          <div id="status" aria-live="polite"></div>
+          <div class="toolbar no-print">
+            <label class="check-inline"><input id="opt-unassigned" type="checkbox" checked /> Include members who have no deaconess</label>
+            <label class="check-inline"><input id="opt-inactive" type="checkbox" checked /> Include inactive deaconesses</label>
+            <label class="check-inline"><input id="opt-phone" type="checkbox" /> Show phone numbers</label>
+          </div>
+          <article class="report panel" id="report" aria-live="polite"></article>
+        </main>
+      </div>
+    </div>
+    <script type="module">
+      import { initMenteeReport } from './js/mentee-report.js'
+      initMenteeReport()
+    </script>
+  </body>
+</html>

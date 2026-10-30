@@ -779,3 +779,31 @@ dialog.wide-dialog {
   max-width: min(900px, 96vw);
   width: 900px;
 }
+
+/* ---- Mentees dialog ---- */
+.mentees-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.mentees-head h2 {
+  margin: 0;
+}
+
+/* ---- Mentee report ---- */
+.mentee-group {
+  color: var(--primary);
+  font-weight: 600;
+}
+.mentee-section h3 {
+  break-after: avoid;
+}
+.mentee-section {
+  margin: 1.5rem 0;
+}
+@media print {
+  .mentee-section {
+    break-inside: avoid-page;
+  }
+}

@@ -406,8 +406,16 @@ Besides name, phone, email, gender, church and notes, each person has:
   keeps that list under **Deaconesses** (add a name once, edit it, deactivate or remove it);
   when registering or editing a member you just pick from the dropdown, so names are always
   spelled the same way. A deactivated deaconess keeps her current members but is not offered for
-  new ones, and one who mentors members cannot be removed until they are moved. Click the member
-  count next to a deaconess to see everyone she mentors.
+  new ones, and one who mentors members cannot be removed until they are moved. Click **View mentees** (or the mentee
+  count) next to a deaconess to see everyone she mentors. In that window **+ Add mentee** finds a
+  member by name or phone and adds her (moving her if another deaconess had her), **Re-assign** moves a
+  mentee to a different deaconess, and **Remove** takes her off the deaconess (she stays a member).
+  Only members can be mentees. Every move is in the audit log.
+* **Mentee report:** the **Mentee report** button beside *Add deaconess* opens a printable report on the
+  usual letterhead: each deaconess (with her group name) and her mentees listed under her, then the
+  members who have no deaconess yet. It opens the print dialog straight away (Print / save as PDF),
+  and has options to include or leave out the unassigned members, inactive deaconesses and phone
+  numbers, plus a CSV export.
 
 On the Members page you can filter by membership type, department and deaconess (for example
 everyone a particular deaconess mentors), search by any of these, sort by department or

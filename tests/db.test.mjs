@@ -1205,6 +1205,58 @@ const ambiguous = await A('admin_import_members', { p_rows: [{ line: 2, full_nam
 check('a group name shared by two deaconesses is not guessed at', byLine(ambiguous, 2).status === 'error' && /more than one/.test(byLine(ambiguous, 2).message), JSON.stringify(ambiguous.rows))
 const exact = await A('admin_import_members', { p_rows: [{ line: 2, full_name: 'Import Exact Xray', phone: '0722 111 012', deaconess: 'Deaconess Second Leader' }] })
 check('her own name always works', exact.counts.new === 1)
+
+// ---- 8.12 Mentees: adding, moving and removing members under a deaconess; the mentee report ------------------
+const dAnn = (await A('admin_save_deaconess', { p_name: 'Deaconess Mentor Ann', p_group_name: 'Pillars of Hope' })).id
+const dBea = (await A('admin_save_deaconess', { p_name: 'Deaconess Mentor Bea' })).id
+const mk2 = async (name, phone) => (await A('admin_create_member', { p_full_name: name, p_phone: phone })).id
+const mA = await mk2('Mentee Yvonne Karanja', '0744 200 001')
+const mB = await mk2('Mentee Zipporah Oloo', '0744 200 002')
+const mC = await mk2('Mentee Winnie Chege', '0744 200 003')
+const menteesOf = async (id) => (await A('admin_list_people', { p_kind: 'member', p_deaconess_id: id, p_limit: 100 })).rows.map((r) => r.id).sort()
+
+const add1 = await A('admin_assign_deaconess', { p_person_ids: [mA, mB], p_deaconess_id: dAnn })
+check('members are added to a deaconess as mentees', add1.ok && add1.changed === 2 && (await menteesOf(dAnn)).length === 2, JSON.stringify(add1))
+check('the deaconess list counts her mentees',
+  (await A('admin_list_deaconesses', {})).rows.find((d) => d.id === dAnn).members === 2)
+const move = await A('admin_assign_deaconess', { p_person_ids: [mB], p_deaconess_id: dBea })
+check('a mentee can be re-assigned to a different deaconess',
+  move.changed === 1 && (await menteesOf(dAnn)).length === 1 && (await menteesOf(dBea)).length === 1)
+const again3 = await A('admin_assign_deaconess', { p_person_ids: [mB], p_deaconess_id: dBea })
+check('assigning someone who is already hers changes nothing', again3.changed === 0 && again3.skipped === 1)
+const rem = await A('admin_assign_deaconess', { p_person_ids: [mA] })
+check('a mentee can be removed from the deaconess, and stays a member',
+  rem.changed === 1 && (await menteesOf(dAnn)).length === 0
+  && (await db.query(`select kind, deaconess_id from public.people where id = $1`, [mA])).rows[0].kind === 'member'
+  && (await db.query(`select deaconess_id from public.people where id = $1`, [mA])).rows[0].deaconess_id === null)
+check('moves and removals are in the audit log',
+  (await db.query(`select count(*)::int n from public.audit_log where action in ('mentee_assigned', 'mentee_reassigned', 'mentee_removed')`)).rows[0].n >= 4)
+check('visitors cannot be mentees (they are left out and counted as skipped)',
+  await (async () => { const v = (await db.query(`insert into public.people (kind, full_name, phone) values ('visitor', 'Mentee Visitor Person', '+254744200009') returning id`)).rows[0].id;
+    const res = await A('admin_assign_deaconess', { p_person_ids: [v, mC], p_deaconess_id: dAnn });
+    return res.changed === 1 && res.skipped === 1 && (await db.query(`select deaconess_id from public.people where id = $1`, [v])).rows[0].deaconess_id === null })())
+check('an inactive deaconess cannot be given mentees', await (async () => {
+  const dOff = (await A('admin_save_deaconess', { p_name: 'Deaconess Mentor Off' })).id
+  await A('admin_save_deaconess', { p_id: dOff, p_name: 'Deaconess Mentor Off', p_active: false })
+  return (await A('admin_assign_deaconess', { p_person_ids: [mA], p_deaconess_id: dOff })).error === 'invalid_deaconess' })())
+check('nothing chosen is refused', (await A('admin_assign_deaconess', { p_person_ids: [], p_deaconess_id: dAnn })).error === 'empty')
+check('only administrators can change mentees', await denied(() => M('admin_assign_deaconess', { p_person_ids: [mA], p_deaconess_id: dAnn })))
+check('the public cannot change mentees', await denied(() => as('anon', () => rpc('admin_assign_deaconess', { p_person_ids: [mA], p_deaconess_id: dAnn }))))
+
+const menteeReport = await A('admin_mentee_report', {})
+const repAnn = menteeReport.deaconesses.find((d) => d.id === dAnn)
+const repBea = menteeReport.deaconesses.find((d) => d.id === dBea)
+check('the mentee report lists every deaconess with her mentees under her',
+  menteeReport.ok && repAnn.mentees.map((m) => m.full_name).join() === 'Mentee Winnie Chege' && repBea.mentees.map((m) => m.full_name).join() === 'Mentee Zipporah Oloo', JSON.stringify(repAnn.mentees))
+check('...with her group name', repAnn.group_name === 'Pillars of Hope')
+check('mentees are in alphabetical order and carry their member number and type',
+  repAnn.mentees[0].label.startsWith('M-') && repAnn.mentees[0].membership_type === 'member')
+check('members without a deaconess are listed separately', menteeReport.unassigned.some((u) => u.id === mA) && !menteeReport.unassigned.some((u) => u.id === mC))
+check('the report totals add up',
+  menteeReport.totals.deaconesses === menteeReport.deaconesses.length
+  && menteeReport.totals.mentees === menteeReport.deaconesses.reduce((n, d) => n + d.mentees.length, 0)
+  && menteeReport.totals.unassigned === menteeReport.unassigned.length)
+check('the mentee report is for administrators only', await denied(() => M('admin_mentee_report', {})))
 }
 console.log(`\n${passed} passed, ${failed} failed`)
 process.exit(failed ? 1 : 0)

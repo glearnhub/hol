@@ -3438,3 +3438,101 @@ begin
     'rows', v_results);
 end;
 $$;
+
+-- ---------------------------------------------------------------------------
+-- Mentees: the members a deaconess mentors. One function adds, moves and removes them.
+--   p_deaconess_id = a deaconess  -> assign these members to her (adding, or moving them
+--                                    from whoever mentored them before)
+--   p_deaconess_id = null         -> remove these members from their deaconess
+-- Only members can be mentees; anyone else in the list is left out and counted as skipped.
+-- ---------------------------------------------------------------------------
+create or replace function public.admin_assign_deaconess(
+  p_person_ids uuid[],
+  p_deaconess_id uuid default null
+)
+returns jsonb
+language plpgsql
+security definer
+volatile
+set search_path = public, pg_temp
+as $$
+declare
+  r record;
+  n integer := 0;
+  v_total integer := coalesce(cardinality(p_person_ids), 0);
+begin
+  perform private.require_admin();
+
+  if v_total = 0 then
+    return private.fail('empty', 'Choose at least one member.');
+  end if;
+  if v_total > 500 then
+    return private.fail('too_many', 'Change at most 500 members at a time.');
+  end if;
+  if p_deaconess_id is not null
+     and not exists (select 1 from public.deaconesses where id = p_deaconess_id and active) then
+    return private.fail('invalid_deaconess', 'Choose an active deaconess from the list.');
+  end if;
+
+  for r in
+    select id, deaconess_id as old_id from public.people
+    where id = any (p_person_ids) and kind = 'member' and deaconess_id is distinct from p_deaconess_id
+    for update
+  loop
+    update public.people set deaconess_id = p_deaconess_id where id = r.id;
+    n := n + 1;
+    perform private.audit('admin:' || auth.uid()::text,
+      case when p_deaconess_id is null then 'mentee_removed'
+           when r.old_id is null then 'mentee_assigned'
+           else 'mentee_reassigned' end,
+      null,
+      jsonb_build_object('person_id', r.id, 'from_deaconess', r.old_id, 'to_deaconess', p_deaconess_id));
+  end loop;
+
+  return jsonb_build_object('ok', true, 'changed', n, 'skipped', v_total - n);
+end;
+$$;
+
+-- Every deaconess with her mentees under her, and the members who have no deaconess yet.
+-- This is the data behind the printed mentee report.
+create or replace function public.admin_mentee_report()
+returns jsonb
+language plpgsql
+security definer
+stable
+set search_path = public, pg_temp
+as $$
+declare
+  v_deaconesses jsonb;
+  v_unassigned jsonb;
+  v_mentees integer;
+begin
+  perform private.require_admin();
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', d.id, 'name', d.name, 'group_name', d.group_name, 'phone', d.phone, 'active', d.active,
+    'mentees', (
+      select coalesce(jsonb_agg(jsonb_build_object(
+        'id', p.id, 'label', private.person_label(p), 'full_name', p.full_name, 'phone', p.phone,
+        'membership_type', p.membership_type, 'status', p.status
+      ) order by lower(p.full_name)), '[]'::jsonb)
+      from public.people p where p.deaconess_id = d.id and p.kind = 'member'
+    )
+  ) order by d.active desc, lower(d.name)), '[]'::jsonb) into v_deaconesses
+  from public.deaconesses d;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', p.id, 'label', private.person_label(p), 'full_name', p.full_name, 'phone', p.phone,
+    'membership_type', p.membership_type, 'status', p.status
+  ) order by lower(p.full_name)), '[]'::jsonb) into v_unassigned
+  from public.people p where p.kind = 'member' and p.deaconess_id is null and p.status = 'active';
+
+  select count(*) into v_mentees from public.people where kind = 'member' and deaconess_id is not null;
+
+  return jsonb_build_object('ok', true, 'deaconesses', v_deaconesses, 'unassigned', v_unassigned,
+    'totals', jsonb_build_object(
+      'deaconesses', jsonb_array_length(v_deaconesses),
+      'mentees', v_mentees,
+      'unassigned', jsonb_array_length(v_unassigned)));
+end;
+$$;

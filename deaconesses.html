@@ -26,6 +26,7 @@
             </div>
             <div class="row-actions">
               <button id="add-deaconess" class="btn btn-primary" type="button">+ Add deaconess</button>
+              <a id="mentee-report" class="btn btn-outline" href="mentee-report.html?print=1" target="_blank" rel="noopener">Mentee report</a>
             </div>
           </div>
           <div id="status" aria-live="polite"></div>
@@ -33,6 +34,55 @@
           <section class="panel">
             <div id="table" class="table-wrap"></div>
           </section>
+
+          <dialog id="mentees-dialog" class="wide-dialog" aria-labelledby="mentees-title">
+            <div class="dialog-head">
+              <div class="mentees-head">
+                <h2 id="mentees-title">Mentees</h2>
+                <button id="add-mentee" class="btn btn-primary btn-small" type="button">+ Add mentee</button>
+              </div>
+              <button class="btn btn-outline btn-small" type="button" data-close>Close</button>
+            </div>
+            <div class="dialog-body">
+              <div id="mentees-status" aria-live="polite"></div>
+              <p id="mentees-summary" class="muted"></p>
+              <div id="mentees-table" class="table-wrap"></div>
+            </div>
+          </dialog>
+
+          <dialog id="reassign-dialog" aria-labelledby="reassign-title">
+            <div class="dialog-head">
+              <h2 id="reassign-title">Re-assign mentee</h2>
+              <button class="btn btn-outline btn-small" type="button" data-close>Close</button>
+            </div>
+            <form id="reassign-form" class="dialog-body" novalidate>
+              <p id="reassign-text"></p>
+              <div class="field">
+                <label for="reassign-to">Move to deaconess</label>
+                <select id="reassign-to"></select>
+              </div>
+              <div id="reassign-status" aria-live="polite"></div>
+              <div class="row-actions">
+                <button id="reassign-go" class="btn btn-primary" type="submit">Move</button>
+                <button class="btn btn-outline" type="button" data-close>Cancel</button>
+              </div>
+            </form>
+          </dialog>
+
+          <dialog id="add-mentee-dialog" class="wide-dialog" aria-labelledby="add-mentee-title">
+            <div class="dialog-head">
+              <h2 id="add-mentee-title">Add a mentee</h2>
+              <button class="btn btn-outline btn-small" type="button" data-close>Close</button>
+            </div>
+            <div class="dialog-body">
+              <p class="muted">Find a member by name or phone number and add her to this deaconess. If she is already mentored by someone else she is moved. To register someone new first, use <a href="members.html">Members</a> (you can choose her deaconess there too).</p>
+              <div class="field">
+                <label for="mentee-search">Search members</label>
+                <input id="mentee-search" type="search" autocomplete="off" placeholder="Name or phone number (at least 3 letters)" />
+              </div>
+              <div id="mentee-results" class="table-wrap"></div>
+            </div>
+          </dialog>
 
           <dialog id="dea-dialog" aria-labelledby="dea-title">
             <div class="dialog-head">

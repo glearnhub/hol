@@ -3,11 +3,16 @@
 // members can be found in one click.
 import { supabase } from './supabase-client.js'
 import { requireAdmin } from './admin-auth.js'
-import { callRpc, errorText } from './admin-common.js'
-import { el, $, notice, toast } from './ui.js'
+import { callRpc, errorText, membershipBadge } from './admin-common.js'
+import { el, $, setChildren, notice, toast, debounce } from './ui.js'
 
 let rows = []
 let editing = null // the deaconess being edited, or null when adding
+let current = null // the deaconess whose mentees are open
+let mentees = [] // her mentees
+let moving = null // the mentee being re-assigned
+
+const label = (d) => `${d.name}${d.group_name ? ` — ${d.group_name}` : ''}`
 
 function statCard(value, label) {
   return el('div', { class: 'stat' }, el('div', { class: 'value' }, String(value)), el('div', { class: 'label' }, label))
@@ -57,7 +62,7 @@ function render() {
               'td',
               {},
               d.members
-                ? el('a', { href: `members.html?deaconess=${d.id}` }, `${d.members} member${d.members === 1 ? '' : 's'}`)
+                ? el('a', { href: '#', onclick: (e) => { e.preventDefault(); openMentees(d) } }, `${d.members} mentee${d.members === 1 ? '' : 's'}`)
                 : '0'
             ),
             el('td', {}, el('span', { class: `badge badge-${d.active ? 'success' : 'muted'}` }, d.active ? 'Active' : 'Inactive')),
@@ -67,6 +72,7 @@ function render() {
               el(
                 'div',
                 { class: 'row-actions' },
+                el('button', { class: 'btn btn-primary btn-small', type: 'button', onclick: () => openMentees(d) }, 'View mentees'),
                 el('button', { class: 'btn btn-outline btn-small', type: 'button', onclick: () => openForm(d) }, 'Edit'),
                 el(
                   'button',
@@ -170,6 +176,186 @@ async function remove(d) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Mentees: the members a deaconess mentors
+// ---------------------------------------------------------------------------
+async function openMentees(d) {
+  current = rows.find((r) => r.id === d.id) || d
+  $('#mentees-title').textContent = label(current)
+  $('#mentees-status').replaceChildren()
+  $('#add-mentee').classList.toggle('hidden', !current.active)
+  $('#mentees-dialog').showModal()
+  await loadMentees()
+}
+
+async function loadMentees() {
+  const host = $('#mentees-table')
+  try {
+    const data = await callRpc('admin_list_people', { p_kind: 'member', p_deaconess_id: current.id, p_limit: 500, p_offset: 0, p_sort: 'name_asc' })
+    mentees = data.rows
+  } catch (e) {
+    notice($('#mentees-status'), errorText(e), 'error')
+    return
+  }
+  $('#mentees-summary').textContent = mentees.length
+    ? `${mentees.length} mentee${mentees.length === 1 ? '' : 's'}${current.active ? '' : ' (this deaconess is inactive, so she cannot be given new mentees)'}`
+    : 'No mentees yet. Click "Add mentee" to give her someone to mentor.'
+  if (mentees.length === 0) {
+    host.replaceChildren()
+    return
+  }
+  host.replaceChildren(
+    el(
+      'table',
+      { class: 'data' },
+      el('thead', {}, el('tr', {}, ...['Mentee', 'Phone', 'Membership type', 'Status', ''].map((h) => el('th', {}, h)))),
+      el(
+        'tbody',
+        {},
+        ...mentees.map((m) =>
+          el(
+            'tr',
+            {},
+            el('td', {}, el('strong', {}, m.full_name), el('div', { class: 'muted' }, m.label)),
+            el('td', {}, m.phone),
+            el('td', {}, membershipBadge(m.membership_type)),
+            el('td', {}, el('span', { class: `badge badge-${m.status === 'active' ? 'success' : 'muted'}` }, m.status === 'active' ? 'Active' : 'Inactive')),
+            el(
+              'td',
+              {},
+              el(
+                'div',
+                { class: 'row-actions' },
+                el('button', { class: 'btn btn-outline btn-small', type: 'button', onclick: () => openReassign(m) }, 'Re-assign'),
+                el('button', { class: 'btn btn-danger btn-small', type: 'button', onclick: () => removeMentee(m) }, 'Remove')
+              )
+            )
+          )
+        )
+      )
+    )
+  )
+}
+
+// After any change: the open list, and the counts on the page behind it.
+async function refreshAll() {
+  await load()
+  if (current) {
+    current = rows.find((r) => r.id === current.id) || current
+    if ($('#mentees-dialog').open) await loadMentees()
+  }
+}
+
+async function removeMentee(m) {
+  if (!confirm(`Remove ${m.full_name} from ${current.name}? She stays a member, just without a deaconess.`)) return
+  try {
+    await callRpc('admin_assign_deaconess', { p_person_ids: [m.id], p_deaconess_id: null })
+    toast(`${m.full_name} removed from ${current.name}`)
+    await refreshAll()
+  } catch (e) {
+    notice($('#mentees-status'), errorText(e), 'error')
+  }
+}
+
+function openReassign(m) {
+  moving = m
+  const others = rows.filter((r) => r.active && r.id !== current.id)
+  if (others.length === 0) {
+    notice($('#mentees-status'), 'There is no other active deaconess to move her to. Add one first.', 'warning')
+    return
+  }
+  $('#reassign-text').textContent = `${m.full_name} is mentored by ${label(current)}. Choose the deaconess who will mentor her instead.`
+  $('#reassign-status').replaceChildren()
+  $('#reassign-to').replaceChildren(...others.map((o) => el('option', { value: o.id }, label(o))))
+  $('#reassign-dialog').showModal()
+}
+
+async function reassign(e) {
+  e.preventDefault()
+  const target = rows.find((r) => r.id === $('#reassign-to').value)
+  const button = $('#reassign-go')
+  button.disabled = true
+  try {
+    await callRpc('admin_assign_deaconess', { p_person_ids: [moving.id], p_deaconess_id: target.id })
+    $('#reassign-dialog').close()
+    toast(`${moving.full_name} moved to ${target.name}`)
+    await refreshAll()
+  } catch (err) {
+    notice($('#reassign-status'), errorText(err), 'error')
+  } finally {
+    button.disabled = false
+  }
+}
+
+// Add a mentee: find a member and give her to this deaconess
+function openAddMentee() {
+  $('#add-mentee-title').textContent = `Add a mentee to ${label(current)}`
+  $('#mentee-search').value = ''
+  $('#mentee-results').replaceChildren()
+  $('#add-mentee-dialog').showModal()
+  $('#mentee-search').focus()
+}
+
+async function searchMembers() {
+  const q = $('#mentee-search').value.trim()
+  const host = $('#mentee-results')
+  if (q.length < 3) {
+    host.replaceChildren()
+    return
+  }
+  try {
+    const data = await callRpc('admin_list_people', { p_kind: 'member', p_search: q, p_status: 'active', p_limit: 15, p_offset: 0 })
+    if (data.rows.length === 0) {
+      host.replaceChildren(el('p', { class: 'muted' }, 'Nobody found. Check the spelling, or register her under Members first.'))
+      return
+    }
+    const byId = new Map(rows.map((r) => [r.id, r]))
+    host.replaceChildren(
+      el(
+        'table',
+        { class: 'data' },
+        el('thead', {}, el('tr', {}, ...['Member', 'Phone', 'Her deaconess now', ''].map((h) => el('th', {}, h)))),
+        el(
+          'tbody',
+          {},
+          ...data.rows.map((m) => {
+            const mine = m.deaconess_id === current.id
+            const other = m.deaconess_id && !mine ? byId.get(m.deaconess_id) || { name: m.deaconess } : null
+            return el(
+              'tr',
+              {},
+              el('td', {}, el('strong', {}, m.full_name), el('div', { class: 'muted' }, m.label)),
+              el('td', {}, m.phone),
+              el('td', {}, mine ? el('span', { class: 'badge badge-success' }, 'Already her mentee') : other ? other.name : el('span', { class: 'muted' }, 'None')),
+              el(
+                'td',
+                {},
+                mine
+                  ? null
+                  : el('button', { class: 'btn btn-primary btn-small', type: 'button', onclick: () => addMentee(m, other) }, other ? 'Move to her' : 'Add as mentee')
+              )
+            )
+          })
+        )
+      )
+    )
+  } catch (e) {
+    notice(host, errorText(e), 'error')
+  }
+}
+
+async function addMentee(m, other) {
+  if (other && !confirm(`${m.full_name} is mentored by ${other.name}. Move her to ${current.name}?`)) return
+  try {
+    await callRpc('admin_assign_deaconess', { p_person_ids: [m.id], p_deaconess_id: current.id })
+    toast(`${m.full_name} added to ${current.name}`)
+    await refreshAll()
+    await searchMembers()
+  } catch (e) {
+    notice($('#mentee-results'), errorText(e), 'error')
+  }
+}
+
 export async function initDeaconesses() {
   const session = await requireAdmin('deaconesses')
   if (!session) return
@@ -181,6 +367,9 @@ export async function initDeaconesses() {
     })
   }
   $('#add-deaconess').addEventListener('click', () => openForm(null))
+  $('#add-mentee').addEventListener('click', openAddMentee)
+  $('#reassign-form').addEventListener('submit', reassign)
+  $('#mentee-search').addEventListener('input', debounce(searchMembers, 300))
   $('#dea-form').addEventListener('submit', save)
   await load()
 }

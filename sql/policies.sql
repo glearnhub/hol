@@ -187,6 +187,8 @@ grant execute on function public.admin_list_people(text, text, text, text, date,
 grant execute on function public.admin_list_deaconesses() to authenticated;
 grant execute on function public.admin_save_deaconess(text, text, uuid, boolean, text) to authenticated;
 grant execute on function public.admin_delete_deaconess(uuid) to authenticated;
+grant execute on function public.admin_assign_deaconess(uuid[], uuid) to authenticated;
+grant execute on function public.admin_mentee_report() to authenticated;
 grant execute on function public.admin_import_members(jsonb, boolean, boolean, boolean, boolean) to authenticated;
 grant execute on function public.admin_person_options() to authenticated;
 grant execute on function public.admin_get_person(uuid, integer) to authenticated;
